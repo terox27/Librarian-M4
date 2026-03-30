@@ -1,0 +1,13 @@
+# Ignorera virtuella miljön
+venv/
+
+# Ignorera de gigantiska AI-modellerna
+models/
+
+# Ignorera all din sparade fakta och vektorer
+engrams/
+*.tq
+
+# Ignorera systemfiler från Mac och Python
+.DS_Store
+__pycache__/
