@@ -11,3 +11,4 @@ engrams/
 # Ignorera systemfiler från Mac och Python
 .DS_Store
 __pycache__/
+._*
