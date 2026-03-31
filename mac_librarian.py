@@ -56,39 +56,7 @@ class MacLibrarian:
         best_indices = np.argsort(similarities)[-top_k:][::-1]
         return "\n\n---\n\n".join([self.all_texts[i] for i in best_indices])
 
-    def ask(self, question):
-        """Retrieves facts and generates an English response instantly"""
-        context = self.smart_search(question)
-        
-        messages = [
-            {
-                "role": "system", 
-                "content": (
-                    "You are a factual assistant. "
-                    "Respond in English. Be concise. Go directly to the answer. "
-                    "DO NOT include any 'Thinking Process' or internal reasoning. "
-                    "If the information is missing, tell me what you know.'"
-                )
-            },
-            {"role": "user", "content": f"FACTS FROM SSD:\n{context}\n\nQUESTION:\n{question}"}
-        ]
-        
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        
-        print("\n🤖 Librarian response:")
-        print("-" * 40)
-        
-        # We keep only the core arguments to avoid MLX compatibility errors
-        response = generate(
-            self.model, 
-            self.tokenizer, 
-            prompt=prompt, 
-            max_tokens=1500,
-            verbose=False
-        )
-        print(response)
-        print("-" * 40)
-
+ 
 # --- CHAT LOOP ---
 if __name__ == "__main__":
     librarian = MacLibrarian()
@@ -106,49 +74,52 @@ if __name__ == "__main__":
     while True:
         user_input = input("\n👤 Question: ").strip()
 
+        # 1. Avsluta programmet
         if user_input.lower() in ["!exit", "exit", "quit"]:
+            print("Biblioteket stänger. Hejdå!")
             break
 
+        # 2. Växla sökläge
         if user_input.lower() == "!search":
             use_retrieval = not use_retrieval
             print(f"--- Sökning på KINGSTON är nu {'PÅ' if use_retrieval else 'AV'} ---")
             continue
 
-        # --- STARTA TIDTAGNING ---
         start_total = time.perf_counter()
         search_time = 0
-
+        
         if use_retrieval:
             print("🔍 Söker i dina engrams på KINGSTON...")
             start_search = time.perf_counter()
-            
-            # Anropar din smart_search funktion
+            # Använder din befintliga smart_search funktion
             context = librarian.smart_search(user_input, top_k=15)
-            
             search_time = time.perf_counter() - start_search
             
-            prompt = (
-                "Du är en hjälpsam bibliotekarie. Använd följande fakta för att svara på frågan.\n\n"
-                f"Fakta från KINGSTON: {context}\n\n"
-                f"Fråga: {user_input}\n\nSvar:"
-            )
+            system_msg = "Du är en professionell bibliotekarie. Svara kort och koncist på svenska baserat ENBART på faktan nedan. Om faktan inte handlar om frågan, säg att du inte hittar info i arkivet men svara allmänt."
+            user_msg = f"FAKTA FRÅN ARKIVET:\n{context}\n\nFRÅGA: {user_input}"
         else:
             print("🧠 Svarar enbart med allmän kunskap...")
-            prompt = f"Fråga: {user_input}\n\nSvar:"
+            system_msg = "Du är en hjälpsam assistent. Svara kort och koncist på svenska."
+            user_msg = user_input
 
-        # --- GENERERA SVAR ---
+        # 3. Bygg prompten med Llama 3.1 standardformat (Chat Template)
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg}
+        ]
+        prompt = librarian.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+        # 4. Generera svar
         start_gen = time.perf_counter()
-        
-        response = generate(librarian.model, librarian.tokenizer, prompt=prompt, verbose=False)
-        
+        response = generate(
+            librarian.model, 
+            librarian.tokenizer, 
+            prompt=prompt, 
+            max_tokens=1000, 
+            verbose=False
+        )
         gen_time = time.perf_counter() - start_gen
         total_time = time.perf_counter() - start_total
 
-        # --- SKRIV UT RESULTAT OCH TIDER ---
         print(f"\n🤖 Librarian response:\n{'-'*40}\n{response}\n{'-'*40}")
-        
-        print(f"⏱️  Tidsrapport:")
-        if use_retrieval:
-            print(f"   • Sökning på SSD:   {search_time:.2f} sekunder")
-        print(f"   • AI-generering:    {gen_time:.2f} sekunder")
-        print(f"   • TOTAL TID:        {total_time:.2f} sekunder")
+        print(f"⏱️  Tidsrapport: Sökning: {search_time:.2f}s | AI: {gen_time:.2f}s | Totalt: {total_time:.2f}s")
