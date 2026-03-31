@@ -13,8 +13,8 @@ class MacLibrarian:
         print("="*60)
         
         # --- PATHS TO YOUR MODELS ON SSD ---
-        # Ensure these point to the exact 'snapshots' folders on your KINGSTON drive!
-        self.MODEL_PATH = "/Volumes/KINGSTON/Librarian/models/models--mlx-community--Qwen3.5-9B-OptiQ-4bit/snapshots/f3abe29941bc37516fb878051e4cc4887e06214f"
+        # Vi byter från den gamla 4-bitarsmodellen till din nya, knivskarpa 8-bitars Llama!
+        self.MODEL_PATH = "/Volumes/KINGSTON/Librarian/models/Llama-3.1-8B-8bit"
         self.ENCODER_PATH = "/Volumes/KINGSTON/Librarian/models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
         # ------------------------------------------
 
