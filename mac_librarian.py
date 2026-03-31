@@ -18,7 +18,7 @@ class MacLibrarian:
         self.ENCODER_PATH = "/Volumes/KINGSTON/Librarian/models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
         # ------------------------------------------
 
-        print(f"🧠 Loading Qwen 3.5 9B from SSD...")
+        print(f"🧠 Loading Model from SSD...")
         self.model, self.tokenizer = load(self.MODEL_PATH)
         
         print("🔍 Starting Vector Engine (Apple Metal/MPS)...")
@@ -69,18 +69,18 @@ if __name__ == "__main__":
     use_retrieval = True
     
     print("\n--- Librarian är redo! ---")
-    print("Kommandon: '!search' (växla sökning), '!exit' (stäng)")
+    print("Kommandon: '!växla' (växla sökning), '!exit' (stäng)")
 
     while True:
         user_input = input("\n👤 Question: ").strip()
 
         # 1. Avsluta programmet
-        if user_input.lower() in ["!exit", "exit", "quit"]:
+        if user_input.lower() in ["!exit", "exit", "quit", "!e"]:
             print("Biblioteket stänger. Hejdå!")
             break
 
         # 2. Växla sökläge
-        if user_input.lower() == "!search":
+        if user_input.lower() in ["!v", "!sök", "!växla"]:
             use_retrieval = not use_retrieval
             print(f"--- Sökning på KINGSTON är nu {'PÅ' if use_retrieval else 'AV'} ---")
             continue
