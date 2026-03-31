@@ -7,6 +7,7 @@ models/
 # Ignorera all din sparade fakta och vektorer
 engrams/
 *.tq
+raw_data/
 
 # Ignorera systemfiler från Mac och Python
 .DS_Store

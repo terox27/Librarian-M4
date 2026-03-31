@@ -11,7 +11,7 @@ from sentence_transformers import SentenceTransformer
 
 # --- KONFIGURATION (Samma som i din Librarian) ---
 RAW_DATA_FOLDER = "/Volumes/KINGSTON/Librarian/raw_data"
-OUTPUT_FOLDER = "/Volumes/KINGSTON/Librarian/engrams"
+OUTPUT_FOLDER = "/Volumes/KINGSTON/Librarian/engrams/user_data"
 ENCODER_PATH = "/Volumes/KINGSTON/Librarian/models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
 
 print("🚀 Laddar Vector Engine (MPS/Metal)...")

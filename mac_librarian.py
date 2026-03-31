@@ -43,7 +43,7 @@ class MacLibrarian:
             with open(file_path, "rb") as f:
                 data = pickle.load(f)
                 self.all_vectors.append(data["vectors"])
-                self.all_texts.extend(data["text_content"])
+                self.all_texts.extend(data["texts"])
         
         self.all_vectors = np.vstack(self.all_vectors)
         print(f"✅ Library Ready! ({len(self.all_texts)} blocks in {time.time()-start_t:.2f}s)")
