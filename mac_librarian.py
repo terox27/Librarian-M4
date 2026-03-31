@@ -97,8 +97,8 @@ if __name__ == "__main__":
     if librarian.load_all_engrams(LIBRARY_PATH):
         print("\n💡 Type your question (or 'exit' to quit).")
         
-        # --- STARTA DIN LIBRARIAN ---
-    use_retrieval = True  # Startläge: Sökning på KINGSTON är på
+       # --- STARTA DIN LIBRARIAN ---
+    use_retrieval = True
     
     print("\n--- Librarian är redo! ---")
     print("Kommandon: '!search' (växla sökning), '!exit' (stäng)")
@@ -106,37 +106,49 @@ if __name__ == "__main__":
     while True:
         user_input = input("\n👤 Question: ").strip()
 
-        # 1. Kolla om du vill stänga programmet
         if user_input.lower() in ["!exit", "exit", "quit"]:
-            print("Biblioteket stänger. Hejdå!")
             break
 
-        # 2. Kolla om du vill slå av/på sökning på KINGSTON
         if user_input.lower() == "!search":
             use_retrieval = not use_retrieval
-            status = "PÅ" if use_retrieval else "AV"
-            print(f"--- Sökning på KINGSTON-disk är nu {status} ---")
+            print(f"--- Sökning på KINGSTON är nu {'PÅ' if use_retrieval else 'AV'} ---")
             continue
 
-        # 3. Hantera sökning vs allmänt svar
+        # --- STARTA TIDTAGNING ---
+        start_total = time.perf_counter()
+        search_time = 0
+
         if use_retrieval:
             print("🔍 Söker i dina engrams på KINGSTON...")
-            # Vi hämtar de 15 mest relevanta blocken från dina .tq-filer
+            start_search = time.perf_counter()
+            
+            # Anropar din smart_search funktion
             context = librarian.smart_search(user_input, top_k=15)
             
+            search_time = time.perf_counter() - start_search
+            
             prompt = (
-                "Du är en hjälpsam bibliotekarie. Använd följande fakta för att svara på frågan. "
-                "Om svaret inte finns i faktan, säg det men svara så gott du kan.\n\n"
+                "Du är en hjälpsam bibliotekarie. Använd följande fakta för att svara på frågan.\n\n"
                 f"Fakta från KINGSTON: {context}\n\n"
-                f"Fråga: {user_input}\n\n"
-                "Svar:"
+                f"Fråga: {user_input}\n\nSvar:"
             )
         else:
             print("🧠 Svarar enbart med allmän kunskap...")
             prompt = f"Fråga: {user_input}\n\nSvar:"
 
-        # 4. Generera svaret med Llama 3.1 8-bit
-        # Vi använder 'verbose=False' för att slippa teknisk mätdata mitt i svaret
+        # --- GENERERA SVAR ---
+        start_gen = time.perf_counter()
+        
         response = generate(librarian.model, librarian.tokenizer, prompt=prompt, verbose=False)
         
+        gen_time = time.perf_counter() - start_gen
+        total_time = time.perf_counter() - start_total
+
+        # --- SKRIV UT RESULTAT OCH TIDER ---
         print(f"\n🤖 Librarian response:\n{'-'*40}\n{response}\n{'-'*40}")
+        
+        print(f"⏱️  Tidsrapport:")
+        if use_retrieval:
+            print(f"   • Sökning på SSD:   {search_time:.2f} sekunder")
+        print(f"   • AI-generering:    {gen_time:.2f} sekunder")
+        print(f"   • TOTAL TID:        {total_time:.2f} sekunder")
