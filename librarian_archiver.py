@@ -149,7 +149,7 @@ def run_archiver(model, tokenizer):
 
 if __name__ == "__main__":
     # Ändra sökvägen till där din Llama 3.1-modell ligger
-    MODEL_PATH = "/Volumes/KINGSTON/Librarian/models/Llama-3.1-8B-Lexi-Uncensored-V2-4bit"
+    MODEL_PATH = "/Volumes/KINGSTON/Librarian/models/Llama-3.1-8B-8bit"
     
     print(f"📂 Laddar modell från {MODEL_PATH}...")
     model, tokenizer = load(MODEL_PATH)
