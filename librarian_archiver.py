@@ -9,21 +9,15 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 from striprtf.striprtf import rtf_to_text
 from docx import Document
-from sentence_transformers import SentenceTransformer
-from mlx_lm import load, generate  # Förutsätter att du kör MLX
+from mlx_lm import generate  # Vi behöver bara generate här, inte load
 
-# --- KONFIGURATION ---
-BASE_PATH = "/Volumes/KINGSTON/Librarian"
+# --- HÄMTA FRÅN DIN NYA MODUL ---
+from core_loader import load_llm, load_encoder, BASE_PATH
+
+# --- KONFIGURATION (BASERAT PÅ BASE_PATH) ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
-# Här låser vi allt till user_data
 ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
 INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
-
-# Sökväg till din SentenceTransformer
-ENCODER_PATH = os.path.join(BASE_PATH, "models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf")
-
-print("🚀 Startar Arkivarien och laddar Vector Engine...")
-encoder = SentenceTransformer(ENCODER_PATH, device='mps')
 
 # --- FUNKTIONER FÖR INDEXERING ---
 
@@ -96,7 +90,7 @@ def ai_analyze(text_chunk, model, tokenizer):
 
 # --- HUVUDPROCESS ---
 
-def run_archiver(model, tokenizer):
+def run_archiver(model, tokenizer, encoder):
     index = load_master_index()
     raw_files = []
     for ext in ["*.pdf", "*.epub", "*.docx", "*.txt", "*.rtf"]:
@@ -120,7 +114,6 @@ def run_archiver(model, tokenizer):
         s_id = get_id(s_name, index['subjects'])
         sub_id = get_id(sub_name, index['sub_subjects'])
         
-        # FIX: Här använder vi ENGRAM_BASE som vi definierade högst upp
         target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
         os.makedirs(target_dir, exist_ok=True)
         
@@ -147,11 +140,17 @@ def run_archiver(model, tokenizer):
         save_master_index(index)
         print(f"✅ Klart! ID: {full_uid}")
 
+# --- STARTA ---
+
 if __name__ == "__main__":
-    # Ändra sökvägen till där din Llama 3.1-modell ligger
-    MODEL_PATH = "/Volumes/KINGSTON/Librarian/models/Llama-3.1-8B-8bit"
+    # Sökvägar till dina modeller på KINGSTON
+    MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
+    ENCODER_PATH = os.path.join(BASE_PATH, "models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf")
     
-    print(f"📂 Laddar modell från {MODEL_PATH}...")
-    model, tokenizer = load(MODEL_PATH)
+    print("🚀 Startar Arkivarien via Core Loader...")
     
-    run_archiver(model, tokenizer)
+    # Ladda via din centrala modul
+    model, tokenizer = load_llm(MODEL_PATH)
+    encoder = load_encoder(ENCODER_PATH)
+    
+    run_archiver(model, tokenizer, encoder)

@@ -1,125 +1,128 @@
-from mlx_lm import load, generate
-from sentence_transformers import SentenceTransformer
-import numpy as np
-import pickle
-import time
 import os
 import glob
+import pickle
+import time
+import numpy as np
+from mlx_lm import generate
+# Vi hämtar "hjärnan" från vår nya modul istället för att ladda lokalt
+from core_loader import load_llm, load_encoder, BASE_PATH
 
 class MacLibrarian:
     def __init__(self):
         print("\n" + "="*60)
-        print("🍏 M4 LIBRARIAN - TOTAL SSD MODE (KINGSTON) 🍏")
+        print("🍏 M4 LIBRARIAN - TERMINAL MODE (CORE LOADER) 🍏")
         print("="*60)
         
-        # --- PATHS TO YOUR MODELS ON SSD ---
-        # Vi byter från den gamla 4-bitarsmodellen till din nya, knivskarpa 8-bitars Llama!
-        self.MODEL_PATH = "/Volumes/KINGSTON/Librarian/models/Llama-3.1-8B-8bit"
-        self.ENCODER_PATH = "/Volumes/KINGSTON/Librarian/models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
-        # ------------------------------------------
+        # Sökvägar hämtas nu med hjälp av BASE_PATH från core_loader
+        self.MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
+        self.ENCODER_PATH = os.path.join(BASE_PATH, "models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf")
 
-        print(f"🧠 Loading Model from SSD...")
-        self.model, self.tokenizer = load(self.MODEL_PATH)
+        # Använd core_loader för att väcka AI:n
+        print(f"🧠 Ansluter till Llama via Core Loader...")
+        self.model, self.tokenizer = load_llm(self.MODEL_PATH)
         
-        print("🔍 Starting Vector Engine (Apple Metal/MPS)...")
-        self.encoder = SentenceTransformer(self.ENCODER_PATH, device='mps')
+        print("🔍 Startar Vector Engine (MPS)...")
+        self.encoder = load_encoder(self.ENCODER_PATH)
         
         self.all_vectors = []
         self.all_texts = []
 
     def load_all_engrams(self, folder_path):
-        """Scans KINGSTON for all .tq files and loads them into RAM"""
-        search_pattern = os.path.join(folder_path, "**/*.tq")
+        """Scannar KINGSTON efter alla .tq-filer och laddar dem"""
+        # Vi letar specifikt i user_data mappen nu
+        search_pattern = os.path.join(folder_path, "user_data/**/*.tq")
         files = glob.glob(search_pattern, recursive=True)
         
         if not files:
-            print(f"❌ Error: No .tq files found in {folder_path}")
+            print(f"❌ Hittade inga engrams i {folder_path}/user_data")
             return False
 
-        print(f"📚 Loading {len(files)} books from library...")
+        print(f"📚 Laddar in {len(files)} arkiverade böcker/filer...")
         start_t = time.time()
         
         for file_path in files:
             with open(file_path, "rb") as f:
-                data = pickle.load(f)
-                self.all_vectors.append(data["vectors"])
-                self.all_texts.extend(data["texts"])
+                try:
+                    data = pickle.load(f)
+                    # Kontrollera att filen innehåller rätt data
+                    if "vectors" in data and "texts" in data:
+                        self.all_vectors.append(data["vectors"])
+                        self.all_texts.extend(data["texts"])
+                except Exception as e:
+                    print(f"⚠️ Kunde inte läsa {file_path}: {e}")
         
-        self.all_vectors = np.vstack(self.all_vectors)
-        print(f"✅ Library Ready! ({len(self.all_texts)} blocks in {time.time()-start_t:.2f}s)")
-        return True
+        if self.all_vectors:
+            self.all_vectors = np.vstack(self.all_vectors)
+            print(f"✅ Biblioteket redo! ({len(self.all_texts)} textblock på {time.time()-start_t:.2f}s)")
+            return True
+        return False
         
     def smart_search(self, question, top_k=15):
-        """Finds the most relevant snippets in the entire library"""
-        q_vec = self.encoder.encode(question)
-        similarities = np.dot(self.all_vectors, q_vec) / (np.linalg.norm(self.all_vectors, axis=1) * np.linalg.norm(q_vec))
+        """Vektor-sökning i hela biblioteket"""
+        q_vec = self.encoder.encode([question])[0] # Notera: [question] för sentence-transformers
+        
+        # Beräkna likhet (Cosine Similarity)
+        similarities = np.dot(self.all_vectors, q_vec) / (
+            np.linalg.norm(self.all_vectors, axis=1) * np.linalg.norm(q_vec)
+        )
+        
+        # Hämta de bästa träffarna
         best_indices = np.argsort(similarities)[-top_k:][::-1]
         return "\n\n---\n\n".join([self.all_texts[i] for i in best_indices])
 
- 
 # --- CHAT LOOP ---
 if __name__ == "__main__":
     librarian = MacLibrarian()
-    LIBRARY_PATH = "/Volumes/KINGSTON/Librarian/engrams"
+    # Vi pekar på engrams-mappen på din KINGSTON
+    LIBRARY_ROOT = os.path.join(BASE_PATH, "engrams")
     
-    if librarian.load_all_engrams(LIBRARY_PATH):
-        print("\n💡 Type your question (or 'exit' to quit).")
-        
-       # --- STARTA DIN LIBRARIAN ---
-    use_retrieval = True
-    
-    print("\n--- Librarian är redo! ---")
-    print("Kommandon: '!växla' (växla sökning), '!exit' (stäng)")
+    if librarian.load_all_engrams(LIBRARY_ROOT):
+        use_retrieval = True
+        print("\n--- 🍏 Librarian är vaken! ---")
+        print("Kommandon: '!växla' (sökning på/av), 'exit' (stäng)")
 
-    while True:
-        user_input = input("\n👤 Question: ").strip()
+        while True:
+            user_input = input("\n👤 Din fråga: ").strip()
 
-        # 1. Avsluta programmet
-        if user_input.lower() in ["!exit", "exit", "quit", "!e"]:
-            print("Biblioteket stänger. Hejdå!")
-            break
+            if user_input.lower() in ["exit", "quit", "!e"]:
+                print("Biblioteket stänger. Glöm inte Ctrl+C om du vill rensa RAM!")
+                break
 
-        # 2. Växla sökläge
-        if user_input.lower() in ["!v", "!sök", "!växla"]:
-            use_retrieval = not use_retrieval
-            print(f"--- Sökning på KINGSTON är nu {'PÅ' if use_retrieval else 'AV'} ---")
-            continue
+            if user_input.lower() in ["!v", "!sök", "!växla"]:
+                use_retrieval = not use_retrieval
+                print(f"--- Sökning på KINGSTON: {'PÅ' if use_retrieval else 'AV'} ---")
+                continue
 
-        start_total = time.perf_counter()
-        search_time = 0
-        
-        if use_retrieval:
-            print("🔍 Söker i dina engrams på KINGSTON...")
-            start_search = time.perf_counter()
-            # Använder din befintliga smart_search funktion
-            context = librarian.smart_search(user_input, top_k=15)
-            search_time = time.perf_counter() - start_search
+            if not user_input: continue
+
+            start_total = time.perf_counter()
             
-            system_msg = "Du är en professionell bibliotekarie. Svara kort och koncist på svenska baserat ENBART på faktan nedan. Om faktan inte handlar om frågan, säg att du inte hittar info i arkivet men svara allmänt."
-            user_msg = f"FAKTA FRÅN ARKIVET:\n{context}\n\nFRÅGA: {user_input}"
-        else:
-            print("🧠 Svarar enbart med allmän kunskap...")
-            system_msg = "Du är en hjälpsam assistent. Svara kort och koncist på svenska."
-            user_msg = user_input
+            if use_retrieval:
+                print("🔍 Letar i dina arkiv...")
+                context = librarian.smart_search(user_input, top_k=10)
+                system_msg = "Du är en professionell bibliotekarie. Svara på svenska baserat på faktan från arkivet."
+                user_msg = f"FAKTA FRÅN ARKIVET:\n{context}\n\nFRÅGA: {user_input}"
+            else:
+                system_msg = "Du är en hjälpsam assistent. Svara på svenska."
+                user_msg = user_input
 
-        # 3. Bygg prompten med Llama 3.1 standardformat (Chat Template)
-        messages = [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg}
-        ]
-        prompt = librarian.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            # Chat Template för Llama 3.1
+            messages = [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg}
+            ]
+            prompt = librarian.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
-        # 4. Generera svar
-        start_gen = time.perf_counter()
-        response = generate(
-            librarian.model, 
-            librarian.tokenizer, 
-            prompt=prompt, 
-            max_tokens=1000, 
-            verbose=False
-        )
-        gen_time = time.perf_counter() - start_gen
-        total_time = time.perf_counter() - start_total
+            # Generera svar
+            response = generate(
+                librarian.model, 
+                librarian.tokenizer, 
+                prompt=prompt, 
+                max_tokens=800, 
+                verbose=False
+            )
+            
+            total_time = time.perf_counter() - start_total
 
-        print(f"\n🤖 Librarian response:\n{'-'*40}\n{response}\n{'-'*40}")
-        print(f"⏱️  Tidsrapport: Sökning: {search_time:.2f}s | AI: {gen_time:.2f}s | Totalt: {total_time:.2f}s")
+            print(f"\n🤖 Librarian:\n{'-'*40}\n{response}\n{'-'*40}")
+            print(f"⏱️  Svarstid: {total_time:.2f}s")
