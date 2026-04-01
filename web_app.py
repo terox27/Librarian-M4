@@ -1,4 +1,4 @@
-# v00.00.08
+# v00.00.09
 import streamlit as st
 import os
 import psutil
@@ -8,9 +8,10 @@ import pickle
 import re
 import numpy as np
 import shutil
+from mlx_lm import generate
 
 # Laddar funktioner från din centrala modul
-from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze
+from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive
 
 # --- KONFIGURATION FÖR ARKIVET ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
@@ -71,42 +72,14 @@ with tab1:
                         text = extract_text(f_in, file_name)
 
                     if text:
-                        analysis = ai_analyze(text, st.session_state.model, st.session_state.tokenizer)
-                        
-                        # Vektorisering
-                        chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
-                        vectors = st.session_state.encoder.encode(chunks)
-                        
-                        # Skapa ID och mappar
-                        s_name = analysis.get('amne', 'Osorterat')
-                        sub_name = analysis.get('underamne', 'Allmänt')
-                        s_id = get_id(s_name, master_index['subjects'])
-                        sub_id = get_id(sub_name, master_index['sub_subjects'])
-                        
-                        target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
-                        os.makedirs(target_dir, exist_ok=True)
-                        
-                        f_id = f"{(len(glob.glob(os.path.join(target_dir, '*.tq'))) + 1):03d}"
-                        full_uid = f"{s_id}{sub_id}{f_id}"
-                        rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
-                        
-                        # Spara engram
-                        with open(os.path.join(target_dir, f"{full_uid}.tq"), 'wb') as out:
-                            pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, out)
-                        
-                        # UPPDATERAD INDEX-LOGIK v00.00.02
-                        master_index['files'][full_uid] = {
-                            "original_name": file_name,
-                            "subject": s_name,
-                            "sub_subject": sub_name,
-                            "keywords": analysis.get('nyckelord', []),
-                            "path": rel_path
-                        }
-                        save_master_index(master_index)
+                        full_uid, s_n, sub_n = process_and_archive(
+                            text, file_name, st.session_state.model, 
+                            st.session_state.tokenizer, st.session_state.encoder, master_index
+                        )
                         
                         # Efter lyckad arkivering: Flytta filen
                         shutil.move(fp, os.path.join(DONE_FOLDER, file_name))
-                        st.success(f"✅ {file_name} är klar!")
+                        st.success(f"✅ {file_name} arkiverad som {full_uid} ({s_n})")
                         if 'engram_cache' in st.session_state: del st.session_state.engram_cache
                     
                     progress_bar.progress((i + 1) / len(raw_files))
@@ -120,39 +93,12 @@ with tab1:
             st.write(f"📖 Bearbetar: {f.name}...")
             
             text = extract_text(f, f.name)
-            analysis = ai_analyze(text, st.session_state.model, st.session_state.tokenizer)
-            
-            # Vektorisering
-            chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
-            vectors = st.session_state.encoder.encode(chunks)
-            
-            # Skapa ID och mappar
-            s_name = analysis.get('amne', 'Osorterat')
-            sub_name = analysis.get('underamne', 'Allmänt')
-            s_id = get_id(s_name, master_index['subjects'])
-            sub_id = get_id(sub_name, master_index['sub_subjects'])
-            
-            target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
-            os.makedirs(target_dir, exist_ok=True)
-            
-            f_id = f"{(len(glob.glob(os.path.join(target_dir, '*.tq'))) + 1):03d}"
-            full_uid = f"{s_id}{sub_id}{f_id}"
-            rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
-            
-            # Spara engram
-            with open(os.path.join(target_dir, f"{full_uid}.tq"), 'wb') as out:
-                pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, out)
-            
-            # UPPDATERAD INDEX-LOGIK v00.00.02
-            master_index['files'][full_uid] = {
-                "original_name": f.name,
-                "subject": s_name,
-                "sub_subject": sub_name,
-                "keywords": analysis.get('nyckelord', []),
-                "path": rel_path
-            }
-            save_master_index(master_index)
-            st.success(f"✅ {f.name} arkiverad som {full_uid} ({time.perf_counter()-t0:.2f}s)")
+            if text:
+                full_uid, s_n, sub_n = process_and_archive(
+                    text, f.name, st.session_state.model, 
+                    st.session_state.tokenizer, st.session_state.encoder, master_index
+                )
+                st.success(f"✅ {f.name} arkiverad som {full_uid} ({time.perf_counter()-t0:.2f}s)")
             if 'engram_cache' in st.session_state: del st.session_state.engram_cache
 
 with tab2:

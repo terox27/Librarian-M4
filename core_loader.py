@@ -1,7 +1,9 @@
-# v00.00.03
+# v00.00.04
 import os
 import json
 import re
+import pickle
+import numpy as np
 import streamlit as st
 from mlx_lm import load, generate
 from sentence_transformers import SentenceTransformer
@@ -95,6 +97,47 @@ def ai_analyze(text_chunk, model, tokenizer):
         pass
     return {"amne": "Osorterat", "underamne": "Allmänt", "nyckelord": []}
 
+def process_and_archive(text, filename, model, tokenizer, encoder, index):
+    """Gemensam logik för att analysera, vektorisera och spara ett dokument."""
+    analysis = ai_analyze(text, model, tokenizer)
+    
+    # Skapa ID:n baserat på AI-analysen
+    s_name = analysis.get('amne', 'Osorterat')
+    sub_name = analysis.get('underamne', 'Allmänt')
+    s_id = get_id(s_name, index['subjects'])
+    sub_id = get_id(sub_name, index['sub_subjects'])
+    
+    target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # Generera unikt fil-ID (UID)
+    import glob
+    existing_count = len(glob.glob(os.path.join(target_dir, "*.tq")))
+    f_id = f"{(existing_count + 1):03d}"
+    full_uid = f"{s_id}{sub_id}{f_id}"
+    rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
+    
+    # Chunking och Vektorisering
+    chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
+    vectors = encoder.encode(chunks)
+    
+    # Spara engram (vektorer + text)
+    output_path = os.path.join(target_dir, f"{full_uid}.tq")
+    with open(output_path, 'wb') as f:
+        pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, f)
+    
+    # Uppdatera master-index
+    index['files'][full_uid] = {
+        "original_name": filename,
+        "subject": s_name,
+        "sub_subject": sub_name,
+        "keywords": analysis.get('nyckelord', []),
+        "path": rel_path
+    }
+    save_master_index(index)
+    
+    return full_uid, s_name, sub_name
+
 # --- INDEX-HANTERING ---
 
 def load_master_index():
@@ -117,6 +160,8 @@ def get_id(name, mapping):
 
 # Exportera variabler för användning i andra filer
 __all__ = [
-    'load_llm', 'load_encoder', 'load_main_system', 'get_available_models', 'BASE_PATH', 
-    'ENGRAM_BASE', 'INDEX_FILE', 'load_master_index', 'save_master_index', 'get_id', 'extract_text', 'ai_analyze'
+    'load_llm', 'load_encoder', 'load_main_system', 'get_available_models', 
+    'BASE_PATH', 'ENGRAM_BASE', 'INDEX_FILE', 
+    'load_master_index', 'save_master_index', 'get_id', 
+    'extract_text', 'ai_analyze', 'process_and_archive'
 ]

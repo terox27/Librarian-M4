@@ -1,12 +1,11 @@
-# v00.00.06
+# v00.00.07
 import os
-import pickle
 import time
 import shutil
 from glob import glob
 
 # --- HÄMTA FRÅN DIN CENTRALA MODUL ---
-from core_loader import load_llm, load_encoder, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze
+from core_loader import load_llm, load_encoder, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive
 
 # --- KONFIGURATION (BASERAT PÅ BASE_PATH) ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
@@ -34,40 +33,9 @@ def run_archiver(model, tokenizer, encoder):
         full_text = extract_text(file_path, file_name)
         if not full_text: continue
 
-        print("🧠 AI analyserar kategorier...")
-        analysis = ai_analyze(full_text, model, tokenizer)
-        s_name = analysis.get('amne', 'Osorterat')
-        sub_name = analysis.get('underamne', 'Allmänt')
-        
-        s_id = get_id(s_name, index['subjects'])
-        sub_id = get_id(sub_name, index['sub_subjects'])
-        
-        target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
-        os.makedirs(target_dir, exist_ok=True)
-        
-        existing_tq = glob(os.path.join(target_dir, "*.tq"))
-        f_id = f"{(len(existing_tq) + 1):03d}"
-        full_uid = f"{s_id}{sub_id}{f_id}"
-        rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
-        
-        print(f"💾 Arkiverar som {s_id}-{sub_id}-{f_id} ({s_name} > {sub_name})")
-        
-        chunks = [full_text[i:i+1000] for i in range(0, len(full_text), 800)]
-        vectors = encoder.encode(chunks)
-        
-        output_file = os.path.join(target_dir, f"{full_uid}.tq")
-        with open(output_file, 'wb') as f:
-            pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, f)
-        
-        # FIX v00.00.02: Lägger till alla fält i indexet
-        index['files'][full_uid] = {
-            "original_name": file_name,
-            "subject": s_name,
-            "sub_subject": sub_name,
-            "keywords": analysis.get('nyckelord', []),
-            "path": rel_path
-        }
-        save_master_index(index)
+        print("🧠 Arkiverar...")
+        full_uid, s_n, sub_n = process_and_archive(full_text, file_name, model, tokenizer, encoder, index)
+
         # Flytta filen till 'done'-mappen
         shutil.move(file_path, os.path.join(DONE_FOLDER, file_name))
         print(f"📦 Originalet flyttat till: {DONE_FOLDER}")
