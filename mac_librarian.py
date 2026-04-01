@@ -1,4 +1,4 @@
-# v00.00.01
+# v00.00.04
 import os
 import glob
 import pickle
@@ -103,10 +103,11 @@ if __name__ == "__main__":
             if use_retrieval:
                 print("🔍 Letar i arkiven...")
                 context = librarian.smart_search(user_input)
-                system_msg = "Du är en professionell bibliotekarie. Svara på svenska baserat på arkivet."
+                # v00.00.04: svara på samma språk som användarens fråga
+                system_msg = "You are a professional librarian. Always respond in the same language as the user's question."
                 user_msg = f"KONTEXT FRÅN ARKIVET:\n{context}\n\nFRÅGA: {user_input}"
             else:
-                system_msg = "Du är en hjälpsam assistent. Svara på svenska."
+                system_msg = "You are a helpful assistant. Respond in the same language as the user."
                 user_msg = user_input
 
             # Chat Template för Llama 3.1

@@ -1,4 +1,4 @@
-# v00.00.03
+# v00.00.04
 import streamlit as st
 import os
 import psutil
@@ -170,9 +170,15 @@ with tab2:
                     t_search = time.perf_counter() - t_s
                 
                 t_g = time.perf_counter()
-                sys_p = "Du är en bibliotekarie. Svara på svenska." if use_archive else "Du är en AI-assistent."
+                # v00.00.04: Respond in same language as user input
                 full_p = f"KONTEXT:\n{context}\n\nFRÅGA: {prompt}" if context else prompt
-                msgs = [{"role": "system", "content": sys_p}, {"role": "user", "content": full_p}]
+                msgs = [
+                    {
+                        "role": "system",
+                        "content": "You are a professional librarian. Always respond in the same language as the user's question, based on the provided context."
+                    },
+                    {"role": "user", "content": full_p}
+                ]
                 inp = st.session_state.tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
                 response = generate(st.session_state.model, st.session_state.tokenizer, prompt=inp, max_tokens=1000)
                 
