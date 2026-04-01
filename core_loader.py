@@ -16,7 +16,7 @@ from docx import Document
 import glob
 
 # --- KONFIGURATION ---
-BASE_PATH = "/Volumes/KINGSTON/Librarian"
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
 INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
 
@@ -158,7 +158,15 @@ def process_and_archive(text, filename, model, tokenizer, encoder, index):
     rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
     
     # Chunking och Vektorisering
-    chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
+    # Förbättrad chunking: Försök dela vid stycken för bättre kontext
+    raw_chunks = re.split(r'\n\s*\n', text)
+    chunks = []
+    for chunk in raw_chunks:
+        if len(chunk) > 1000: # Om stycket är för långt, dela det ändå
+            chunks.extend([chunk[i:i+1000] for i in range(0, len(chunk), 800)])
+        elif len(chunk) > 50: # Skippa för korta fragment
+            chunks.append(chunk)
+            
     vectors = encoder.encode(chunks)
     
     # Spara engram (vektorer + text)

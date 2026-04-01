@@ -7,6 +7,7 @@ import glob
 import pickle
 import re
 import numpy as np
+import json
 import shutil
 from mlx_lm import generate
 
@@ -16,8 +17,20 @@ from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, lo
 # --- KONFIGURATION FÖR ARKIVET ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
 DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
+CONVERSATION_FILE = os.path.join(BASE_PATH, "conversation_history.json")
 os.makedirs(RAW_FOLDER, exist_ok=True)
 os.makedirs(DONE_FOLDER, exist_ok=True)
+
+# --- HISTORIKHANTERING ---
+def load_history():
+    if os.path.exists(CONVERSATION_FILE):
+        with open(CONVERSATION_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_history(messages):
+    with open(CONVERSATION_FILE, "w", encoding="utf-8") as f:
+        json.dump(messages, f, indent=4, ensure_ascii=False)
 
 # --- GUI ---
 st.set_page_config(page_title="Librarian OS v00.00.02", page_icon="🍏", layout="wide")
@@ -102,7 +115,8 @@ with tab1:
             if 'engram_cache' in st.session_state: del st.session_state.engram_cache
 
 with tab2:
-    if "messages" not in st.session_state: st.session_state.messages = []
+    if "messages" not in st.session_state: 
+        st.session_state.messages = load_history()
     for msg in st.session_state.messages: st.chat_message(msg["role"]).markdown(msg["content"])
 
     if prompt := st.chat_input("Fråga arkivet..."):
@@ -110,6 +124,7 @@ with tab2:
             t_total = time.perf_counter()
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").markdown(prompt)
+            save_history(st.session_state.messages)
 
             with st.chat_message("assistant"):
                 context, t_search = "", 0
@@ -141,4 +156,5 @@ with tab2:
                 st.markdown(response)
                 st.caption(f"⏱️ Sök: {t_search:.2f}s | AI: {time.perf_counter()-t_g:.2f}s | Totalt: {time.perf_counter()-t_total:.2f}s")
                 st.session_state.messages.append({"role": "assistant", "content": response})
+                save_history(st.session_state.messages)
         else: st.error("Starta systemet först!")
