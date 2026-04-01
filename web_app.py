@@ -83,6 +83,8 @@ st.sidebar.metric("RAM", f"{psutil.Process(os.getpid()).memory_info().rss / (102
 st.sidebar.markdown("---")
 use_archive = st.sidebar.toggle("Använd Arkiv (RAG)", value=True)
 search_threshold = st.sidebar.slider("Söktröskel", 0.0, 0.70, 0.22, 0.01)
+# v00.00.05 - Slider för kontext-djup
+top_k = st.sidebar.slider("Kontext-djup (Antal delar)", 1, 20, 5)
 
 if st.sidebar.button("🚀 Starta Systemet"):
     with st.sidebar.status("Laddar modeller...") as status:
@@ -166,7 +168,7 @@ with tab2:
                                 if np.max(sims) > search_threshold:
                                     matches.append((np.max(sims), d['texts'][np.argmax(sims)]))
                         matches.sort(key=lambda x: x[0], reverse=True)
-                        context = "\n---\n".join([m[1] for m in matches[:5]])
+                        context = "\n---\n".join([m[1] for m in matches[:top_k]])
                     t_search = time.perf_counter() - t_s
                 
                 t_g = time.perf_counter()
