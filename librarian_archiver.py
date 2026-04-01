@@ -1,4 +1,4 @@
-# v00.00.02
+# v00.00.03
 import os
 import json
 import pickle
@@ -67,27 +67,17 @@ def extract_text(file_path):
 # --- AI-ANALYS ---
 
 def ai_analyze(text_chunk, model, tokenizer):
-    prompt = f"""Analysera dokumentet och svara ENDAST med JSON.
-    Kategorisera i:
-    1. amne (Huvudkategori, t.ex. 'Vetenskap')
-    2. underamne (Nisch, t.ex. 'Kärnfysik')
-    3. nyckelord (Lista med exakt 10 ord)
-
-    TEXT: {text_chunk[:2500]}"""
-
-    messages = [
-        {"role": "system", "content": "Du är en bibliotekarie som svarar enbart i JSON."},
-        {"role": "user", "content": prompt}
-    ]
-    
+    # Categorization in English for better cross-referencing
+    prompt = f"Analyze the document and answer ONLY with JSON. Categorize in ENGLISH: amne (Main subject), underamne (Niche), and 10 keywords.\n\nTEXT: {text_chunk[:2500]}"
+    messages = [{"role": "system", "content": "You are a professional librarian. Answer only in JSON."},
+                {"role": "user", "content": prompt}]
     formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     response = generate(model, tokenizer, prompt=formatted, max_tokens=300, verbose=False)
-    
     try:
         json_str = re.search(r'\{.*\}', response, re.DOTALL).group()
         return json.loads(json_str)
     except:
-        return {"amne": "Osorterat", "underamne": "Allmänt", "nyckelord": []}
+        return {"amne": "Unsorted", "underamne": "General", "nyckelord": []}
 
 # --- HUVUDPROCESS ---
 
