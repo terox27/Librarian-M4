@@ -1,4 +1,4 @@
-# v00.00.02
+# v00.00.03
 import streamlit as st
 import os
 import psutil
@@ -61,8 +61,9 @@ def extract_text_from_upload(uploaded_file):
     return None
 
 def ai_analyze_text(text_chunk, model, tokenizer):
-    prompt = f"Analysera dokumentet och svara ENDAST med JSON.\nKategorisera i: amne, underamne och 10 nyckelord.\n\nTEXT: {text_chunk[:2500]}"
-    messages = [{"role": "system", "content": "Du är en bibliotekarie som svarar enbart i JSON."},
+    # Categorization in English for better consistency with English sources
+    prompt = f"Analyze the document and answer ONLY with JSON. Categorize in ENGLISH: amne (Main subject), underamne (Niche), and 10 keywords.\n\nTEXT: {text_chunk[:2500]}"
+    messages = [{"role": "system", "content": "You are a professional librarian. Answer only in JSON format."},
                 {"role": "user", "content": prompt}]
     formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     response = generate(model, tokenizer, prompt=formatted, max_tokens=300, verbose=False)
@@ -71,7 +72,7 @@ def ai_analyze_text(text_chunk, model, tokenizer):
         import json
         return json.loads(json_str)
     except:
-        return {"amne": "Osorterat", "underamne": "Allmänt", "nyckelord": []}
+        return {"amne": "Unsorted", "underamne": "General", "nyckelord": []}
 
 # --- GUI ---
 st.set_page_config(page_title="Librarian OS v00.00.02", page_icon="🍏", layout="wide")
