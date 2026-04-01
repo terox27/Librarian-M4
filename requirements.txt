@@ -1,0 +1,10 @@
+streamlit
+mlx-lm
+sentence-transformers
+pypdf
+EbookLib
+beautifulsoup4
+striprtf
+python-docx
+psutil
+numpy
