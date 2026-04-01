@@ -1,4 +1,4 @@
-# v00.00.01
+# v00.00.02
 import os
 import json
 import pickle
@@ -111,7 +111,8 @@ def run_archiver(model, tokenizer, encoder):
 
         print("🧠 AI analyserar kategorier...")
         analysis = ai_analyze(full_text, model, tokenizer)
-        s_name, sub_name = analysis.get('amne', 'Osorterat'), analysis.get('underamne', 'Allmänt')
+        s_name = analysis.get('amne', 'Osorterat')
+        sub_name = analysis.get('underamne', 'Allmänt')
         
         s_id = get_id(s_name, index['subjects'])
         sub_id = get_id(sub_name, index['sub_subjects'])
@@ -122,6 +123,7 @@ def run_archiver(model, tokenizer, encoder):
         existing_tq = glob(os.path.join(target_dir, "*.tq"))
         f_id = f"{(len(existing_tq) + 1):03d}"
         full_uid = f"{s_id}{sub_id}{f_id}"
+        rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
         
         print(f"💾 Arkiverar som {s_id}-{sub_id}-{f_id} ({s_name} > {sub_name})")
         
@@ -132,12 +134,13 @@ def run_archiver(model, tokenizer, encoder):
         with open(output_file, 'wb') as f:
             pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, f)
         
+        # FIX v00.00.02: Lägger till alla fält i indexet
         index['files'][full_uid] = {
             "original_name": file_name,
             "subject": s_name,
             "sub_subject": sub_name,
             "keywords": analysis.get('nyckelord', []),
-            "path": f"{s_id}/{sub_id}/{full_uid}.tq"
+            "path": rel_path
         }
         save_master_index(index)
         t_total = time.perf_counter() - t_start
@@ -146,12 +149,10 @@ def run_archiver(model, tokenizer, encoder):
 # --- STARTA ---
 
 if __name__ == "__main__":
-    # Sökvägar till dina modeller på KINGSTON
     MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
-    # Vi använder den flerspråkiga ID:n för att matcha web_app.py
     ENCODER_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     
-    print("🚀 Startar Arkivarien v00.00.01 via Core Loader...")
+    print("🚀 Startar Arkivarien v00.00.02 via Core Loader...")
     
     model, tokenizer = load_llm(MODEL_PATH)
     encoder = load_encoder(ENCODER_ID)

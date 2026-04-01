@@ -1,4 +1,4 @@
-# v00.00.01
+# v00.00.02
 import streamlit as st
 import os
 import psutil
@@ -20,7 +20,6 @@ from core_loader import load_main_system, BASE_PATH
 # --- KONFIGURATION FÖR ARKIVET ---
 ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
 INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
-RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
 
 # --- HJÄLPFUNKTIONER ---
 
@@ -62,7 +61,7 @@ def extract_text_from_upload(uploaded_file):
     return None
 
 def ai_analyze_text(text_chunk, model, tokenizer):
-    prompt = f"Analysera och kategorisera följande text i amne, underamne och 10 nyckelord. Svara exakt i JSON.\n\nTEXT: {text_chunk[:2500]}"
+    prompt = f"Analysera dokumentet och svara ENDAST med JSON.\nKategorisera i: amne, underamne och 10 nyckelord.\n\nTEXT: {text_chunk[:2500]}"
     messages = [{"role": "system", "content": "Du är en bibliotekarie som svarar enbart i JSON."},
                 {"role": "user", "content": prompt}]
     formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -75,9 +74,9 @@ def ai_analyze_text(text_chunk, model, tokenizer):
         return {"amne": "Osorterat", "underamne": "Allmänt", "nyckelord": []}
 
 # --- GUI ---
-st.set_page_config(page_title="Librarian OS v00.00.01", page_icon="📚", layout="wide")
+st.set_page_config(page_title="Librarian OS v00.00.02", page_icon="🍏", layout="wide")
 
-st.sidebar.title("🍏 Librarian Control")
+st.sidebar.title("🍏 Librarian OS v2")
 st.sidebar.metric("RAM", f"{psutil.Process(os.getpid()).memory_info().rss / (1024**3):.2f} GB")
 
 st.sidebar.markdown("---")
@@ -104,25 +103,42 @@ with tab1:
         master_index = load_master_index()
         for f in files:
             t0 = time.perf_counter()
+            st.write(f"📖 Bearbetar: {f.name}...")
+            
             text = extract_text_from_upload(f)
             analysis = ai_analyze_text(text, st.session_state.model, st.session_state.tokenizer)
+            
+            # Vektorisering
             chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
             vectors = st.session_state.encoder.encode(chunks)
             
-            s_id = get_id(analysis['amne'], master_index['subjects'])
-            sub_id = get_id(analysis['underamne'], master_index['sub_subjects'])
+            # Skapa ID och mappar
+            s_name = analysis.get('amne', 'Osorterat')
+            sub_name = analysis.get('underamne', 'Allmänt')
+            s_id = get_id(s_name, master_index['subjects'])
+            sub_id = get_id(sub_name, master_index['sub_subjects'])
+            
             target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
             os.makedirs(target_dir, exist_ok=True)
             
             f_id = f"{(len(glob.glob(os.path.join(target_dir, '*.tq'))) + 1):03d}"
             full_uid = f"{s_id}{sub_id}{f_id}"
+            rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
             
+            # Spara engram
             with open(os.path.join(target_dir, f"{full_uid}.tq"), 'wb') as out:
                 pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, out)
             
-            master_index['files'][full_uid] = {"original_name": f.name}
+            # UPPDATERAD INDEX-LOGIK v00.00.02
+            master_index['files'][full_uid] = {
+                "original_name": f.name,
+                "subject": s_name,
+                "sub_subject": sub_name,
+                "keywords": analysis.get('nyckelord', []),
+                "path": rel_path
+            }
             save_master_index(master_index)
-            st.success(f"✅ {f.name} klar ({time.perf_counter()-t0:.2f}s)")
+            st.success(f"✅ {f.name} arkiverad som {full_uid} ({time.perf_counter()-t0:.2f}s)")
 
 with tab2:
     if "messages" not in st.session_state: st.session_state.messages = []
