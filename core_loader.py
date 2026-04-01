@@ -87,19 +87,34 @@ def extract_text(file_source, filename):
         print(f"❌ Fel vid extrahering från {filename}: {e}")
     return None
 
-def ai_analyze(text_chunk, model, tokenizer):
-    """Kategoriserar dokumentet med hjälp av LLM."""
-    prompt = f"Analyze the document and answer ONLY with JSON. Categorize in ENGLISH: amne (Main subject), underamne (Niche), and 10 keywords.\n\nTEXT: {text_chunk[:2500]}"
-    messages = [{"role": "system", "content": "You are a professional librarian. Answer only in JSON format."},
-                {"role": "user", "content": prompt}]
+def ai_analyze(text_chunk, model, tokenizer, retries=2):
+    """Kategoriserar dokumentet med hjälp av LLM med retry-logik och striktare validering."""
+    prompt = (
+        "Analyze the following text and provide a classification in JSON format ONLY. "
+        "Keys: 'amne' (Main topic), 'underamne' (Specific sub-topic), 'nyckelord' (List of 10 keywords). "
+        "Use English for values.\n\n"
+        f"TEXT: {text_chunk[:2500]}"
+    )
+    messages = [
+        {"role": "system", "content": "You are a professional librarian. Respond ONLY with a valid JSON object. No preamble or explanation."},
+        {"role": "user", "content": prompt}
+    ]
     formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    response = generate(model, tokenizer, prompt=formatted, max_tokens=300, verbose=False)
-    try:
-        match = re.search(r'\{.*\}', response, re.DOTALL)
-        if match:
-            return json.loads(match.group())
-    except:
-        pass
+
+    for attempt in range(retries + 1):
+        try:
+            response = generate(model, tokenizer, prompt=formatted, max_tokens=300, verbose=False)
+            match = re.search(r'\{.*\}', response, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                # Validera att obligatoriska fält finns
+                if all(k in data for k in ["amne", "underamne", "nyckelord"]):
+                    return data
+            
+            print(f"⚠️ Försök {attempt + 1}: Ogiltig JSON-struktur från AI. Försöker igen...")
+        except Exception as e:
+            print(f"❌ Försök {attempt + 1}: Fel vid parsing av AI-svar: {e}")
+            
     return {"amne": "Osorterat", "underamne": "Allmänt", "nyckelord": []}
 
 def load_engram_cache():
