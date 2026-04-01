@@ -1,4 +1,4 @@
-# v00.00.06
+# v00.00.07
 import streamlit as st
 import os
 import psutil
@@ -16,37 +16,13 @@ from striprtf.striprtf import rtf_to_text
 from docx import Document
 
 # Laddar funktioner från din centrala modul
-from core_loader import load_main_system, BASE_PATH
+from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id
 
 # --- KONFIGURATION FÖR ARKIVET ---
-ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
-INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
 DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
 os.makedirs(RAW_FOLDER, exist_ok=True)
 os.makedirs(DONE_FOLDER, exist_ok=True)
-
-# --- HJÄLPFUNKTIONER ---
-
-def load_master_index():
-    os.makedirs(ENGRAM_BASE, exist_ok=True)
-    if os.path.exists(INDEX_FILE):
-        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
-            import json
-            return json.load(f)
-    return {"subjects": {}, "sub_subjects": {}, "files": {}}
-
-def save_master_index(index):
-    with open(INDEX_FILE, 'w', encoding='utf-8') as f:
-        import json
-        json.dump(index, f, indent=4, ensure_ascii=False)
-
-def get_id(name, mapping):
-    if name in mapping:
-        return mapping[name]
-    new_id = f"{(len(mapping) + 1):03d}"
-    mapping[name] = new_id
-    return new_id
 
 def extract_text_from_upload(uploaded_file):
     ext = os.path.splitext(uploaded_file.name)[1].lower()

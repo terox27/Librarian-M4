@@ -1,6 +1,5 @@
-# v00.00.04
+# v00.00.05
 import os
-import json
 import pickle
 import time
 import re
@@ -14,33 +13,11 @@ from docx import Document
 from mlx_lm import generate
 
 # --- HÄMTA FRÅN DIN CENTRALA MODUL ---
-from core_loader import load_llm, load_encoder, BASE_PATH
+from core_loader import load_llm, load_encoder, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id
 
 # --- KONFIGURATION (BASERAT PÅ BASE_PATH) ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
-ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
-INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
 DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
-
-# --- FUNKTIONER FÖR INDEXERING ---
-
-def load_master_index():
-    os.makedirs(ENGRAM_BASE, exist_ok=True)
-    if os.path.exists(INDEX_FILE):
-        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {"subjects": {}, "sub_subjects": {}, "files": {}}
-
-def save_master_index(index):
-    with open(INDEX_FILE, 'w', encoding='utf-8') as f:
-        json.dump(index, f, indent=4, ensure_ascii=False)
-
-def get_id(name, mapping):
-    if name in mapping:
-        return mapping[name]
-    new_id = f"{(len(mapping) + 1):03d}"
-    mapping[name] = new_id
-    return new_id
 
 # --- FUNKTIONER FÖR TEXTEXTRAKTION ---
 
