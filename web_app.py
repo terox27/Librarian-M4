@@ -1,4 +1,4 @@
-# v00.00.05
+# v00.00.06
 import streamlit as st
 import os
 import psutil
@@ -7,6 +7,7 @@ import glob
 import pickle
 import re
 import numpy as np
+import shutil
 from mlx_lm import generate
 from pypdf import PdfReader
 from ebooklib import epub
@@ -20,6 +21,10 @@ from core_loader import load_main_system, BASE_PATH
 # --- KONFIGURATION FÖR ARKIVET ---
 ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
 INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
+RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
+DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
+os.makedirs(RAW_FOLDER, exist_ok=True)
+os.makedirs(DONE_FOLDER, exist_ok=True)
 
 # --- HJÄLPFUNKTIONER ---
 
@@ -101,6 +106,76 @@ if st.sidebar.button("🗑️ Töm RAM"):
 tab1, tab2 = st.tabs(["📥 Arkivera", "💬 Chatt"])
 
 with tab1:
+    st.subheader("Batch-arkivering (KINGSTON)")
+    st.info(f"Lägg dina filer i: `{RAW_FOLDER}` och tryck på knappen nedan.")
+
+    if st.button("🚀 Starta arkivering från raw_data"):
+        if 'model' not in st.session_state:
+            st.error("Starta systemet i sidebaren först!")
+        else:
+            raw_files = []
+            for ext in ["*.pdf", "*.epub", "*.docx", "*.txt", "*.rtf"]:
+                raw_files.extend(glob.glob(os.path.join(RAW_FOLDER, ext)))
+            
+            if not raw_files:
+                st.warning("📭 Inga nya filer hittades i raw_data.")
+            else:
+                master_index = load_master_index()
+                progress_bar = st.progress(0)
+                
+                for i, fp in enumerate(raw_files):
+                    file_name = os.path.basename(fp)
+                    st.write(f"📖 Bearbetar: {file_name}...")
+                    
+                    # Här använder vi din befintliga extraherings-logik (men för lokala filer)
+                    with open(fp, "rb") as f_bytes:
+                        # Vi simulerar ett uploaded_file-objekt för att återanvända din kod
+                        from io import BytesIO
+                        fake_file = BytesIO(f_bytes.read())
+                        fake_file.name = file_name
+                        text = extract_text_from_upload(fake_file)
+
+                    if text:
+                        analysis = ai_analyze_text(text, st.session_state.model, st.session_state.tokenizer)
+                        
+                        # Vektorisering
+                        chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
+                        vectors = st.session_state.encoder.encode(chunks)
+                        
+                        # Skapa ID och mappar
+                        s_name = analysis.get('amne', 'Osorterat')
+                        sub_name = analysis.get('underamne', 'Allmänt')
+                        s_id = get_id(s_name, master_index['subjects'])
+                        sub_id = get_id(sub_name, master_index['sub_subjects'])
+                        
+                        target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
+                        os.makedirs(target_dir, exist_ok=True)
+                        
+                        f_id = f"{(len(glob.glob(os.path.join(target_dir, '*.tq'))) + 1):03d}"
+                        full_uid = f"{s_id}{sub_id}{f_id}"
+                        rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
+                        
+                        # Spara engram
+                        with open(os.path.join(target_dir, f"{full_uid}.tq"), 'wb') as out:
+                            pickle.dump({'vectors': vectors, 'texts': chunks, 'metadata': analysis}, out)
+                        
+                        # UPPDATERAD INDEX-LOGIK v00.00.02
+                        master_index['files'][full_uid] = {
+                            "original_name": file_name,
+                            "subject": s_name,
+                            "sub_subject": sub_name,
+                            "keywords": analysis.get('nyckelord', []),
+                            "path": rel_path
+                        }
+                        save_master_index(master_index)
+                        
+                        # Efter lyckad arkivering: Flytta filen
+                        shutil.move(fp, os.path.join(DONE_FOLDER, file_name))
+                        st.success(f"✅ {file_name} är klar!")
+                    
+                    progress_bar.progress((i + 1) / len(raw_files))
+                st.balloons()
+
     files = st.file_uploader("Ladda upp dokument", accept_multiple_files=True)
     if files and 'model' in st.session_state and st.button("Starta Arkivering"):
         master_index = load_master_index()
