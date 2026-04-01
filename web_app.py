@@ -27,6 +27,7 @@ def load_master_index():
     os.makedirs(ENGRAM_BASE, exist_ok=True)
     if os.path.exists(INDEX_FILE):
         with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+            import json
             return json.load(f)
     return {"subjects": {}, "sub_subjects": {}, "files": {}}
 
@@ -55,7 +56,6 @@ def extract_text_from_upload(uploaded_file):
             return "\n".join([para.text for para in doc.paragraphs])
         elif ext == ".rtf":
             return rtf_to_text(uploaded_file.read().decode("utf-8", errors="ignore"))
-        # EPUB kräver oftast en fysisk fil, så vi sparar den temporärt om det behövs
     except Exception as e:
         st.error(f"Fel vid läsning av {uploaded_file.name}: {e}")
     return None
@@ -103,7 +103,7 @@ model_full_path = os.path.join(BASE_PATH, "models", selected_model) if selected_
 # PÅ/AV för Arkivet
 st.sidebar.subheader("🔍 Sökinställningar")
 use_archive = st.sidebar.toggle("Använd Arkiv (RAG)", value=True, help="PÅ: AI:n letar i dina filer. AV: AI:n svarar fritt.")
-search_threshold = st.sidebar.slider("Söktröskel", 0.0, 0.70, 0.22, 0.01)
+search_threshold = st.sidebar.slider("Söktröskel (Similarity)", 0.0, 0.70, 0.22, 0.01)
 
 st.sidebar.markdown("---")
 
@@ -121,6 +121,8 @@ with col1:
 with col2:
     if st.sidebar.button("🗑️ Töm RAM"):
         st.cache_resource.clear()
+        for k in ['model', 'tokenizer', 'encoder']:
+            if k in st.session_state: del st.session_state[k]
         st.rerun()
 
 st.sidebar.markdown("---")
@@ -129,40 +131,24 @@ st.sidebar.markdown('<p style="color:#FF4B4B; font-weight:bold; font-size:14px; 
 # --- HUVUDYTA: TABS ---
 tab1, tab2 = st.tabs(["📥 Arkivera & Ingest", "💬 Bibliotekarien (Chatt)"])
 
-# --- TAB 1: ARKIVERING MED TIDER ---
+# --- TAB 1: ARKIVERING ---
 with tab1:
     st.header("Arkivera nya dokument")
     files = st.file_uploader("Dra in filer", accept_multiple_files=True)
     
     if files and 'model' in st.session_state:
         if st.button("Starta AI-Arkivering"):
-            import json
             master_index = load_master_index()
-            
             for f in files:
                 start_f = time.perf_counter()
                 st.subheader(f"📄 Bearbetar: {f.name}")
-                
-                # 1. Extrahera
-                t_extract = time.perf_counter()
                 text = extract_text_from_upload(f)
-                d_extract = time.perf_counter() - t_extract
-                st.write(f"✔️ Text utläst ({d_extract:.2f}s)")
-                
-                # 2. AI Analys
-                t_ai = time.perf_counter()
                 analysis = ai_analyze_text(text, st.session_state.model, st.session_state.tokenizer)
-                d_ai = time.perf_counter() - t_ai
-                st.write(f"✔️ AI-kategorisering: **{analysis['amne']} > {analysis['underamne']}** ({d_ai:.2f}s)")
+                st.write(f"✔️ AI-kategorisering: **{analysis['amne']} > {analysis['underamne']}**")
                 
-                # 3. Vektorisering
-                t_vec = time.perf_counter()
                 chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
                 vectors = st.session_state.encoder.encode(chunks)
-                d_vec = time.perf_counter() - t_vec
-                st.write(f"✔️ Vektorisering färdig ({d_vec:.2f}s)")
                 
-                # 4. Spara (Siffer-logik)
                 s_id = get_id(analysis['amne'], master_index['subjects'])
                 sub_id = get_id(analysis['underamne'], master_index['sub_subjects'])
                 target_dir = os.path.join(ENGRAM_BASE, s_id, sub_id)
@@ -176,11 +162,9 @@ with tab1:
                 
                 master_index['files'][full_uid] = {"original_name": f.name, "keywords": analysis['nyckelord']}
                 save_master_index(master_index)
-                
-                total_f = time.perf_counter() - start_f
-                st.success(f"✅ Arkiverad som ID {full_uid} på {total_f:.2f} sekunder.")
+                st.success(f"✅ Arkiverad på {time.perf_counter() - start_f:.2f}s")
 
-# --- TAB 2: CHATT MED VÄXEL ---
+# --- TAB 2: CHATT ---
 with tab2:
     st.header("Bibliotekarien")
     if "messages" not in st.session_state: st.session_state.messages = []
@@ -214,13 +198,17 @@ with tab2:
                         matches.sort(key=lambda x: x[0], reverse=True)
                         context = "\n---\n".join([m[1] for m in matches[:5]])
                     search_time = time.perf_counter() - start_s
-                    status.update(label=f"✅ Hittade information ({search_time:.2f}s)", state="complete")
+                    status.update(label=f"✅ Sökning klar ({search_time:.2f}s)", state="complete")
+                    
+                    system_prompt = "Du är en professionell bibliotekarie. Svara på svenska baserat på arkivet. Om info saknas, svara allmänt men var ärlig."
+                else:
+                    # LOGIK FÖR NÄR ARKIVET ÄR AVSTÄNGT
+                    system_prompt = "Du är en hjälpsam AI-assistent. Svara på svenska. Om användaren ställer frågor om 'dem' eller specifika system utan sammanhang, be dem förtydliga eller nämn att du inte har tillgång till arkivet just nu."
                 
                 start_gen = time.perf_counter()
-                sys_p = "Du är en bibliotekarie. Svara på svenska."
-                full_p = f"KONTEXT:\n{context}\n\nFRÅGA: {prompt}" if context else prompt
+                full_p = f"KONTEXT FRÅN ARKIVET:\n{context}\n\nFRÅGA: {prompt}" if context else prompt
                 
-                msgs = [{"role": "system", "content": sys_p}, {"role": "user", "content": full_p}]
+                msgs = [{"role": "system", "content": system_prompt}, {"role": "user", "content": full_p}]
                 inp = st.session_state.tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
                 response = generate(st.session_state.model, st.session_state.tokenizer, prompt=inp, max_tokens=1000)
                 gen_time = time.perf_counter() - start_gen
