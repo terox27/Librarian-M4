@@ -1,3 +1,4 @@
+# v00.00.01
 import os
 import json
 import pickle
@@ -9,9 +10,9 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 from striprtf.striprtf import rtf_to_text
 from docx import Document
-from mlx_lm import generate  # Vi behöver bara generate här, inte load
+from mlx_lm import generate
 
-# --- HÄMTA FRÅN DIN NYA MODUL ---
+# --- HÄMTA FRÅN DIN CENTRALA MODUL ---
 from core_loader import load_llm, load_encoder, BASE_PATH
 
 # --- KONFIGURATION (BASERAT PÅ BASE_PATH) ---
@@ -101,6 +102,7 @@ def run_archiver(model, tokenizer, encoder):
         return
 
     for file_path in raw_files:
+        t_start = time.perf_counter()
         file_name = os.path.basename(file_path)
         print(f"\n📖 Bearbetar: {file_name}")
         
@@ -138,19 +140,20 @@ def run_archiver(model, tokenizer, encoder):
             "path": f"{s_id}/{sub_id}/{full_uid}.tq"
         }
         save_master_index(index)
-        print(f"✅ Klart! ID: {full_uid}")
+        t_total = time.perf_counter() - t_start
+        print(f"✅ Klart! ID: {full_uid} (Tid: {t_total:.2f}s)")
 
 # --- STARTA ---
 
 if __name__ == "__main__":
     # Sökvägar till dina modeller på KINGSTON
     MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
-    ENCODER_PATH = os.path.join(BASE_PATH, "models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf")
+    # Vi använder den flerspråkiga ID:n för att matcha web_app.py
+    ENCODER_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     
-    print("🚀 Startar Arkivarien via Core Loader...")
+    print("🚀 Startar Arkivarien v00.00.01 via Core Loader...")
     
-    # Ladda via din centrala modul
     model, tokenizer = load_llm(MODEL_PATH)
-    encoder = load_encoder(ENCODER_PATH)
+    encoder = load_encoder(ENCODER_ID)
     
     run_archiver(model, tokenizer, encoder)

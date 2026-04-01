@@ -1,35 +1,37 @@
+# v00.00.01
 import os
 import glob
 import pickle
 import time
 import numpy as np
 from mlx_lm import generate
-# Vi hämtar "hjärnan" från vår nya modul istället för att ladda lokalt
+# Vi hämtar "hjärnan" och inställningar från din centrala loader
 from core_loader import load_llm, load_encoder, BASE_PATH
 
 class MacLibrarian:
     def __init__(self):
         print("\n" + "="*60)
-        print("🍏 M4 LIBRARIAN - TERMINAL MODE (CORE LOADER) 🍏")
+        print("🍏 M4 LIBRARIAN - TERMINAL MODE v00.00.01 🍏")
         print("="*60)
         
-        # Sökvägar hämtas nu med hjälp av BASE_PATH från core_loader
+        # Sökvägar hämtas centralt
         self.MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
-        self.ENCODER_PATH = os.path.join(BASE_PATH, "models/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf")
+        # Vi använder Multilingual ID för att matcha web_app.py
+        self.ENCODER_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
         # Använd core_loader för att väcka AI:n
         print(f"🧠 Ansluter till Llama via Core Loader...")
         self.model, self.tokenizer = load_llm(self.MODEL_PATH)
         
-        print("🔍 Startar Vector Engine (MPS)...")
-        self.encoder = load_encoder(self.ENCODER_PATH)
+        print(f"🌍 Startar Multilingual Vector Engine (MPS)...")
+        self.encoder = load_encoder(self.ENCODER_ID)
         
         self.all_vectors = []
         self.all_texts = []
 
     def load_all_engrams(self, folder_path):
         """Scannar KINGSTON efter alla .tq-filer och laddar dem"""
-        # Vi letar specifikt i user_data mappen nu
+        # Vi letar i user_data mappen rekursivt
         search_pattern = os.path.join(folder_path, "user_data/**/*.tq")
         files = glob.glob(search_pattern, recursive=True)
         
@@ -37,14 +39,13 @@ class MacLibrarian:
             print(f"❌ Hittade inga engrams i {folder_path}/user_data")
             return False
 
-        print(f"📚 Laddar in {len(files)} arkiverade böcker/filer...")
+        print(f"📚 Laddar in {len(files)} arkiverade filer/engrams...")
         start_t = time.time()
         
         for file_path in files:
             with open(file_path, "rb") as f:
                 try:
                     data = pickle.load(f)
-                    # Kontrollera att filen innehåller rätt data
                     if "vectors" in data and "texts" in data:
                         self.all_vectors.append(data["vectors"])
                         self.all_texts.extend(data["texts"])
@@ -57,11 +58,12 @@ class MacLibrarian:
             return True
         return False
         
-    def smart_search(self, question, top_k=15):
-        """Vektor-sökning i hela biblioteket"""
-        q_vec = self.encoder.encode([question])[0] # Notera: [question] för sentence-transformers
+    def smart_search(self, question, top_k=10):
+        """Vektor-sökning (Cosine Similarity)"""
+        # Multilingual encoder förstår nu 'äpple' == 'apple'
+        q_vec = self.encoder.encode([question])[0]
         
-        # Beräkna likhet (Cosine Similarity)
+        # Beräkna likhet
         similarities = np.dot(self.all_vectors, q_vec) / (
             np.linalg.norm(self.all_vectors, axis=1) * np.linalg.norm(q_vec)
         )
@@ -73,19 +75,19 @@ class MacLibrarian:
 # --- CHAT LOOP ---
 if __name__ == "__main__":
     librarian = MacLibrarian()
-    # Vi pekar på engrams-mappen på din KINGSTON
+    # Pekar på engrams-mappen på din KINGSTON
     LIBRARY_ROOT = os.path.join(BASE_PATH, "engrams")
     
     if librarian.load_all_engrams(LIBRARY_ROOT):
         use_retrieval = True
-        print("\n--- 🍏 Librarian är vaken! ---")
-        print("Kommandon: '!växla' (sökning på/av), 'exit' (stäng)")
+        print("\n--- 🍏 Librarian Terminal är redo! ---")
+        print("Kommandon: '!v' (växla sökning), 'exit' (stäng)")
 
         while True:
-            user_input = input("\n👤 Din fråga: ").strip()
+            user_input = input("\n👤 Fråga: ").strip()
 
             if user_input.lower() in ["exit", "quit", "!e"]:
-                print("Biblioteket stänger. Glöm inte Ctrl+C om du vill rensa RAM!")
+                print("Stänger ner. Glöm inte Ctrl+C!")
                 break
 
             if user_input.lower() in ["!v", "!sök", "!växla"]:
@@ -97,11 +99,12 @@ if __name__ == "__main__":
 
             start_total = time.perf_counter()
             
+            context = ""
             if use_retrieval:
-                print("🔍 Letar i dina arkiv...")
-                context = librarian.smart_search(user_input, top_k=10)
-                system_msg = "Du är en professionell bibliotekarie. Svara på svenska baserat på faktan från arkivet."
-                user_msg = f"FAKTA FRÅN ARKIVET:\n{context}\n\nFRÅGA: {user_input}"
+                print("🔍 Letar i arkiven...")
+                context = librarian.smart_search(user_input)
+                system_msg = "Du är en professionell bibliotekarie. Svara på svenska baserat på arkivet."
+                user_msg = f"KONTEXT FRÅN ARKIVET:\n{context}\n\nFRÅGA: {user_input}"
             else:
                 system_msg = "Du är en hjälpsam assistent. Svara på svenska."
                 user_msg = user_input
