@@ -9,7 +9,7 @@ import re
 import numpy as np
 import json
 import shutil
-from mlx_lm import generate
+from mlx_lm import generate, stream_generate
 
 # Laddar funktioner från din centrala modul
 from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive, load_engram_cache, perform_search
@@ -151,10 +151,16 @@ with tab2:
                     {"role": "user", "content": full_p}
                 ]
                 inp = st.session_state.tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-                response = generate(st.session_state.model, st.session_state.tokenizer, prompt=inp, max_tokens=1000)
-                
-                st.markdown(response)
+
+                # Streaming av svar för en mer följsam upplevelse
+                placeholder = st.empty()
+                full_response = ""
+                for chunk in stream_generate(st.session_state.model, st.session_state.tokenizer, prompt=inp, max_tokens=1000):
+                    full_response += chunk
+                    placeholder.markdown(full_response + "▌")
+                placeholder.markdown(full_response)
+
                 st.caption(f"⏱️ Sök: {t_search:.2f}s | AI: {time.perf_counter()-t_g:.2f}s | Totalt: {time.perf_counter()-t_total:.2f}s")
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
                 save_history(st.session_state.messages)
         else: st.error("Starta systemet först!")
