@@ -1,4 +1,4 @@
-# v00.00.07
+# v00.00.08
 import streamlit as st
 import os
 import psutil
@@ -8,52 +8,15 @@ import pickle
 import re
 import numpy as np
 import shutil
-from mlx_lm import generate
-from pypdf import PdfReader
-from ebooklib import epub
-from bs4 import BeautifulSoup
-from striprtf.striprtf import rtf_to_text
-from docx import Document
 
 # Laddar funktioner från din centrala modul
-from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id
+from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze
 
 # --- KONFIGURATION FÖR ARKIVET ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
 DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
 os.makedirs(RAW_FOLDER, exist_ok=True)
 os.makedirs(DONE_FOLDER, exist_ok=True)
-
-def extract_text_from_upload(uploaded_file):
-    ext = os.path.splitext(uploaded_file.name)[1].lower()
-    try:
-        if ext == ".txt":
-            return uploaded_file.read().decode("utf-8", errors="ignore")
-        elif ext == ".pdf":
-            reader = PdfReader(uploaded_file)
-            return "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
-        elif ext == ".docx":
-            doc = Document(uploaded_file)
-            return "\n".join([para.text for para in doc.paragraphs])
-        elif ext == ".rtf":
-            return rtf_to_text(uploaded_file.read().decode("utf-8", errors="ignore"))
-    except Exception as e:
-        st.error(f"Fel vid läsning: {e}")
-    return None
-
-def ai_analyze_text(text_chunk, model, tokenizer):
-    # Categorization in English for better consistency with English sources
-    prompt = f"Analyze the document and answer ONLY with JSON. Categorize in ENGLISH: amne (Main subject), underamne (Niche), and 10 keywords.\n\nTEXT: {text_chunk[:2500]}"
-    messages = [{"role": "system", "content": "You are a professional librarian. Answer only in JSON format."},
-                {"role": "user", "content": prompt}]
-    formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    response = generate(model, tokenizer, prompt=formatted, max_tokens=300, verbose=False)
-    try:
-        json_str = re.search(r'\{.*\}', response, re.DOTALL).group()
-        import json
-        return json.loads(json_str)
-    except:
-        return {"amne": "Unsorted", "underamne": "General", "nyckelord": []}
 
 # --- GUI ---
 st.set_page_config(page_title="Librarian OS v00.00.02", page_icon="🍏", layout="wide")
@@ -76,6 +39,7 @@ if st.sidebar.button("🚀 Starta Systemet"):
 
 if st.sidebar.button("🗑️ Töm RAM"):
     st.cache_resource.clear()
+    if 'engram_cache' in st.session_state: del st.session_state.engram_cache
     st.rerun()
 
 # --- TABS ---
@@ -103,16 +67,11 @@ with tab1:
                     file_name = os.path.basename(fp)
                     st.write(f"📖 Bearbetar: {file_name}...")
                     
-                    # Här använder vi din befintliga extraherings-logik (men för lokala filer)
-                    with open(fp, "rb") as f_bytes:
-                        # Vi simulerar ett uploaded_file-objekt för att återanvända din kod
-                        from io import BytesIO
-                        fake_file = BytesIO(f_bytes.read())
-                        fake_file.name = file_name
-                        text = extract_text_from_upload(fake_file)
+                    with open(fp, "rb") as f_in:
+                        text = extract_text(f_in, file_name)
 
                     if text:
-                        analysis = ai_analyze_text(text, st.session_state.model, st.session_state.tokenizer)
+                        analysis = ai_analyze(text, st.session_state.model, st.session_state.tokenizer)
                         
                         # Vektorisering
                         chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
@@ -148,6 +107,7 @@ with tab1:
                         # Efter lyckad arkivering: Flytta filen
                         shutil.move(fp, os.path.join(DONE_FOLDER, file_name))
                         st.success(f"✅ {file_name} är klar!")
+                        if 'engram_cache' in st.session_state: del st.session_state.engram_cache
                     
                     progress_bar.progress((i + 1) / len(raw_files))
                 st.balloons()
@@ -159,8 +119,8 @@ with tab1:
             t0 = time.perf_counter()
             st.write(f"📖 Bearbetar: {f.name}...")
             
-            text = extract_text_from_upload(f)
-            analysis = ai_analyze_text(text, st.session_state.model, st.session_state.tokenizer)
+            text = extract_text(f, f.name)
+            analysis = ai_analyze(text, st.session_state.model, st.session_state.tokenizer)
             
             # Vektorisering
             chunks = [text[i:i+1000] for i in range(0, len(text), 800)]
@@ -193,6 +153,7 @@ with tab1:
             }
             save_master_index(master_index)
             st.success(f"✅ {f.name} arkiverad som {full_uid} ({time.perf_counter()-t0:.2f}s)")
+            if 'engram_cache' in st.session_state: del st.session_state.engram_cache
 
 with tab2:
     if "messages" not in st.session_state: st.session_state.messages = []
@@ -208,18 +169,27 @@ with tab2:
                 context, t_search = "", 0
                 if use_archive:
                     t_s = time.perf_counter()
-                    files_tq = glob.glob(os.path.join(ENGRAM_BASE, "**/*.tq"), recursive=True)
-                    if files_tq:
-                        q_vec = st.session_state.encoder.encode([prompt])[0]
-                        matches = []
+                    if 'engram_cache' not in st.session_state:
+                        files_tq = glob.glob(os.path.join(ENGRAM_BASE, "**/*.tq"), recursive=True)
+                        cache = {'vectors': [], 'texts': []}
                         for fp in files_tq:
                             with open(fp, 'rb') as f_in:
                                 d = pickle.load(f_in)
-                                sims = np.dot(d['vectors'], q_vec) / (np.linalg.norm(d['vectors'], axis=1) * np.linalg.norm(q_vec))
-                                if np.max(sims) > search_threshold:
-                                    matches.append((np.max(sims), d['texts'][np.argmax(sims)]))
-                        matches.sort(key=lambda x: x[0], reverse=True)
-                        context = "\n---\n".join([m[1] for m in matches[:top_k]])
+                                cache['vectors'].append(d['vectors'])
+                                cache['texts'].extend(d['texts'])
+                        if cache['vectors']:
+                            cache['vectors'] = np.vstack(cache['vectors'])
+                        st.session_state.engram_cache = cache
+                    
+                    cache = st.session_state.engram_cache
+                    if cache['texts']:
+                        q_vec = st.session_state.encoder.encode([prompt])[0]
+                        sims = np.dot(cache['vectors'], q_vec) / (np.linalg.norm(cache['vectors'], axis=1) * np.linalg.norm(q_vec))
+                        best_idx = np.where(sims > search_threshold)[0]
+                        if len(best_idx) > 0:
+                            sorted_idx = best_idx[np.argsort(sims[best_idx])][::-1]
+                            context = "\n---\n".join([cache['texts'][i] for i in sorted_idx[:top_k]])
+
                     t_search = time.perf_counter() - t_s
                 
                 t_g = time.perf_counter()

@@ -1,62 +1,16 @@
-# v00.00.05
+# v00.00.06
 import os
 import pickle
 import time
-import re
 import shutil
 from glob import glob
-from pypdf import PdfReader
-from ebooklib import epub
-from bs4 import BeautifulSoup
-from striprtf.striprtf import rtf_to_text
-from docx import Document
-from mlx_lm import generate
 
 # --- HÄMTA FRÅN DIN CENTRALA MODUL ---
-from core_loader import load_llm, load_encoder, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id
+from core_loader import load_llm, load_encoder, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze
 
 # --- KONFIGURATION (BASERAT PÅ BASE_PATH) ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
 DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
-
-# --- FUNKTIONER FÖR TEXTEXTRAKTION ---
-
-def extract_text(file_path):
-    ext = os.path.splitext(file_path)[1].lower()
-    try:
-        if ext == ".txt":
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: return f.read()
-        elif ext == ".pdf":
-            return "\n".join([p.extract_text() for p in PdfReader(file_path).pages if p.extract_text()])
-        elif ext == ".docx":
-            return "\n".join([para.text for para in Document(file_path).paragraphs])
-        elif ext == ".epub":
-            book = epub.read_epub(file_path)
-            t = ""
-            for item in book.get_items():
-                if item.get_type() == 1: 
-                    t += BeautifulSoup(item.get_content(), 'html.parser').get_text() + "\n"
-            return t
-        elif ext == ".rtf":
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: return rtf_to_text(f.read())
-    except Exception as e:
-        print(f"❌ Fel vid läsning av {file_path}: {e}")
-    return None
-
-# --- AI-ANALYS ---
-
-def ai_analyze(text_chunk, model, tokenizer):
-    # Categorization in English for better cross-referencing
-    prompt = f"Analyze the document and answer ONLY with JSON. Categorize in ENGLISH: amne (Main subject), underamne (Niche), and 10 keywords.\n\nTEXT: {text_chunk[:2500]}"
-    messages = [{"role": "system", "content": "You are a professional librarian. Answer only in JSON."},
-                {"role": "user", "content": prompt}]
-    formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    response = generate(model, tokenizer, prompt=formatted, max_tokens=300, verbose=False)
-    try:
-        json_str = re.search(r'\{.*\}', response, re.DOTALL).group()
-        return json.loads(json_str)
-    except:
-        return {"amne": "Unsorted", "underamne": "General", "nyckelord": []}
 
 # --- HUVUDPROCESS ---
 
@@ -77,7 +31,7 @@ def run_archiver(model, tokenizer, encoder):
         file_name = os.path.basename(file_path)
         print(f"\n📖 Bearbetar: {file_name}")
         
-        full_text = extract_text(file_path)
+        full_text = extract_text(file_path, file_name)
         if not full_text: continue
 
         print("🧠 AI analyserar kategorier...")

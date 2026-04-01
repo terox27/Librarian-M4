@@ -9,4 +9,3 @@ python-docx
 psutil
 numpy
 lxml
-lxml
