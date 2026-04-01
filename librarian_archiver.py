@@ -1,9 +1,10 @@
-# v00.00.03
+# v00.00.04
 import os
 import json
 import pickle
 import time
 import re
+import shutil
 from glob import glob
 from pypdf import PdfReader
 from ebooklib import epub
@@ -19,6 +20,7 @@ from core_loader import load_llm, load_encoder, BASE_PATH
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
 ENGRAM_BASE = os.path.join(BASE_PATH, "engrams", "user_data")
 INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
+DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
 
 # --- FUNKTIONER FÖR INDEXERING ---
 
@@ -83,6 +85,8 @@ def ai_analyze(text_chunk, model, tokenizer):
 
 def run_archiver(model, tokenizer, encoder):
     index = load_master_index()
+    DONE_FOLDER = os.path.join(BASE_PATH, "arkiverat_original")
+    os.makedirs(DONE_FOLDER, exist_ok=True)
     raw_files = []
     for ext in ["*.pdf", "*.epub", "*.docx", "*.txt", "*.rtf"]:
         raw_files.extend(glob(os.path.join(RAW_FOLDER, ext)))
@@ -133,8 +137,19 @@ def run_archiver(model, tokenizer, encoder):
             "path": rel_path
         }
         save_master_index(index)
+        # Flytta filen till 'done'-mappen
+        shutil.move(file_path, os.path.join(DONE_FOLDER, file_name))
+        print(f"📦 Originalet flyttat till: {DONE_FOLDER}")
         t_total = time.perf_counter() - t_start
         print(f"✅ Klart! ID: {full_uid} (Tid: {t_total:.2f}s)")
+
+    # Fråga om städning
+    if os.listdir(DONE_FOLDER):
+        clean_up = input(f"\n🧹 Arkiveringen är klar. Vill du tömma mappen '{DONE_FOLDER}'? (j/n): ").strip().lower()
+        if clean_up == 'j':
+            for f in glob(os.path.join(DONE_FOLDER, "*")):
+                os.remove(f)
+            print("✨ Mappen är nu tömd!")
 
 # --- STARTA ---
 
@@ -142,7 +157,7 @@ if __name__ == "__main__":
     MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
     ENCODER_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     
-    print("🚀 Startar Arkivarien v00.00.02 via Core Loader...")
+    print("🚀 Startar Arkivarien v00.00.04 via Core Loader...")
     
     model, tokenizer = load_llm(MODEL_PATH)
     encoder = load_encoder(ENCODER_ID)
