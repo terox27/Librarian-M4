@@ -22,5 +22,9 @@
     {
         "role": "assistant",
         "content": "Newton var en kristen och tog sin religion mycket allvarligt. Han var dock inte villig att acceptera någon annans förklaring om något viktigt. Han läste Bibeln med samma intensiva och frågande sinne som han använde för att undersöka den naturliga världen.\n\nNewton var inte överens med den engelska kyrkan om den heliga treenigheten. Han tyckte det var fel att kalla Jesus för Gud. Om han vägrade att acceptera kyrkans lära skulle han tvingas lämna Cambridge i skam, men han ville inte ljuga om något så viktigt.\n\nNewton vände sig till kung Karl II för hjälp, eftersom han var överhuvud för den engelska kyrkan. Newton ville inte berätta den riktiga orsaken till sitt problem, utan försökte hitta en annan väg framåt."
+    },
+    {
+        "role": "user",
+        "content": "berätta lite om Newton"
     }
 ]
