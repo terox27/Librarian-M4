@@ -159,8 +159,13 @@ with tab2:
                     full_response += chunk.text
                     placeholder.markdown(full_response + "▌")
                 placeholder.markdown(full_response)
+                
+                # Beräkna tokens per sekund
+                tokens_generated = len(st.session_state.tokenizer.encode(full_response))
+                ai_generation_time = time.perf_counter() - t_g
+                tokens_per_second = tokens_generated / ai_generation_time if ai_generation_time > 0 else 0
 
-                st.caption(f"⏱️ Sök: {t_search:.2f}s | AI: {time.perf_counter()-t_g:.2f}s | Totalt: {time.perf_counter()-t_total:.2f}s")
+                st.caption(f"⏱️ Sök: {t_search:.2f}s | AI: {ai_generation_time:.2f}s ({tokens_per_second:.1f} tok/s) | Totalt: {time.perf_counter()-t_total:.2f}s")
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
                 save_history(st.session_state.messages)
         else: st.error("Starta systemet först!")
