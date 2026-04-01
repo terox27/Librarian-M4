@@ -1,17 +1,19 @@
-# v00.00.04
+# v00.00.06
 import os
 import json
 import re
 import pickle
 import numpy as np
 import streamlit as st
+import warnings
 from mlx_lm import load, generate
 from sentence_transformers import SentenceTransformer
 from pypdf import PdfReader
-from ebooklib import epub
+from ebooklib import epub, ITEM_DOCUMENT
 from bs4 import BeautifulSoup
 from striprtf.striprtf import rtf_to_text
 from docx import Document
+import glob
 
 # --- KONFIGURATION ---
 BASE_PATH = "/Volumes/KINGSTON/Librarian"
@@ -22,6 +24,9 @@ INDEX_FILE = os.path.join(ENGRAM_BASE, "master_index.json")
 MAIN_LLM_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
 # Denna laddas ner automatiskt om den saknas (ca 420MB)
 ENCODER_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+# Ignorera ebooklib-varningar för en renare konsol
+warnings.filterwarnings('ignore', category=UserWarning)
 
 @st.cache_resource
 def load_llm(model_path):
@@ -71,7 +76,7 @@ def extract_text(file_source, filename):
             book = epub.read_epub(file_source)
             t = ""
             for item in book.get_items():
-                if item.get_type() == 1:
+                if item.get_type() == ITEM_DOCUMENT:
                     t += BeautifulSoup(item.get_content(), 'html.parser').get_text() + "\n"
             return t
         elif ext == ".rtf":
@@ -97,6 +102,36 @@ def ai_analyze(text_chunk, model, tokenizer):
         pass
     return {"amne": "Osorterat", "underamne": "Allmänt", "nyckelord": []}
 
+def load_engram_cache():
+    """Laddar alla engram-vektorer till minnet för snabb sökning."""
+    files_tq = glob.glob(os.path.join(ENGRAM_BASE, "**/*.tq"), recursive=True)
+    cache = {'vectors': [], 'texts': []}
+    for fp in files_tq:
+        try:
+            with open(fp, 'rb') as f_in:
+                d = pickle.load(f_in)
+                cache['vectors'].append(d['vectors'])
+                cache['texts'].extend(d['texts'])
+        except Exception as e:
+            print(f"⚠️ Kunde inte ladda {fp}: {e}")
+    if cache['vectors']:
+        cache['vectors'] = np.vstack(cache['vectors'])
+    return cache
+
+def perform_search(query, encoder, cache, top_k=5, threshold=0.22):
+    """Utför vektorsökning (Cosine Similarity) i det cachade biblioteket."""
+    if not cache or not cache.get('texts') or len(cache['texts']) == 0:
+        return ""
+    
+    q_vec = encoder.encode([query])[0]
+    sims = np.dot(cache['vectors'], q_vec) / (np.linalg.norm(cache['vectors'], axis=1) * np.linalg.norm(q_vec))
+    
+    best_idx = np.where(sims > threshold)[0]
+    if len(best_idx) == 0: return ""
+    
+    sorted_idx = best_idx[np.argsort(sims[best_idx])][::-1]
+    return "\n---\n".join([cache['texts'][i] for i in sorted_idx[:top_k]])
+
 def process_and_archive(text, filename, model, tokenizer, encoder, index):
     """Gemensam logik för att analysera, vektorisera och spara ett dokument."""
     analysis = ai_analyze(text, model, tokenizer)
@@ -111,9 +146,14 @@ def process_and_archive(text, filename, model, tokenizer, encoder, index):
     os.makedirs(target_dir, exist_ok=True)
     
     # Generera unikt fil-ID (UID)
-    import glob
-    existing_count = len(glob.glob(os.path.join(target_dir, "*.tq")))
-    f_id = f"{(existing_count + 1):03d}"
+    existing_files = glob.glob(os.path.join(target_dir, "*.tq"))
+    if not existing_files:
+        f_id = "001"
+    else:
+        # Hämta de sista 3 siffrorna i filnamnet för att hitta högsta ID
+        ids = [int(os.path.basename(f)[:9][-3:]) for f in existing_files if os.path.basename(f)[:9][-3:].isdigit()]
+        f_id = f"{(max(ids) + 1 if ids else len(existing_files) + 1):03d}"
+
     full_uid = f"{s_id}{sub_id}{f_id}"
     rel_path = f"{s_id}/{sub_id}/{full_uid}.tq"
     
@@ -160,8 +200,9 @@ def get_id(name, mapping):
 
 # Exportera variabler för användning i andra filer
 __all__ = [
-    'load_llm', 'load_encoder', 'load_main_system', 'get_available_models', 
-    'BASE_PATH', 'ENGRAM_BASE', 'INDEX_FILE', 
-    'load_master_index', 'save_master_index', 'get_id', 
-    'extract_text', 'ai_analyze', 'process_and_archive'
+    'load_llm', 'load_encoder', 'load_main_system', 'get_available_models',
+    'BASE_PATH', 'ENGRAM_BASE', 'INDEX_FILE',
+    'load_master_index', 'save_master_index', 'get_id',
+    'extract_text', 'ai_analyze', 'process_and_archive',
+    'load_engram_cache', 'perform_search'
 ]

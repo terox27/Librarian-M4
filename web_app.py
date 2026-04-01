@@ -1,4 +1,4 @@
-# v00.00.09
+# v00.00.11
 import streamlit as st
 import os
 import psutil
@@ -11,7 +11,7 @@ import shutil
 from mlx_lm import generate
 
 # Laddar funktioner från din centrala modul
-from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive
+from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive, load_engram_cache, perform_search
 
 # --- KONFIGURATION FÖR ARKIVET ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
@@ -116,26 +116,13 @@ with tab2:
                 if use_archive:
                     t_s = time.perf_counter()
                     if 'engram_cache' not in st.session_state:
-                        files_tq = glob.glob(os.path.join(ENGRAM_BASE, "**/*.tq"), recursive=True)
-                        cache = {'vectors': [], 'texts': []}
-                        for fp in files_tq:
-                            with open(fp, 'rb') as f_in:
-                                d = pickle.load(f_in)
-                                cache['vectors'].append(d['vectors'])
-                                cache['texts'].extend(d['texts'])
-                        if cache['vectors']:
-                            cache['vectors'] = np.vstack(cache['vectors'])
-                        st.session_state.engram_cache = cache
-                    
-                    cache = st.session_state.engram_cache
-                    if cache['texts']:
-                        q_vec = st.session_state.encoder.encode([prompt])[0]
-                        sims = np.dot(cache['vectors'], q_vec) / (np.linalg.norm(cache['vectors'], axis=1) * np.linalg.norm(q_vec))
-                        best_idx = np.where(sims > search_threshold)[0]
-                        if len(best_idx) > 0:
-                            sorted_idx = best_idx[np.argsort(sims[best_idx])][::-1]
-                            context = "\n---\n".join([cache['texts'][i] for i in sorted_idx[:top_k]])
+                        st.session_state.engram_cache = load_engram_cache()
 
+                    context = perform_search(
+                        prompt, st.session_state.encoder, 
+                        st.session_state.engram_cache, 
+                        top_k=top_k, threshold=search_threshold
+                    )
                     t_search = time.perf_counter() - t_s
                 
                 t_g = time.perf_counter()

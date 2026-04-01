@@ -1,12 +1,11 @@
-# v00.00.04
+# v00.00.06
 import os
 import glob
 import pickle
 import time
 import numpy as np
 from mlx_lm import generate
-# Vi hämtar "hjärnan" och inställningar från din centrala loader
-from core_loader import load_llm, load_encoder, BASE_PATH
+from core_loader import load_llm, load_encoder, BASE_PATH, load_engram_cache, perform_search
 
 class MacLibrarian:
     def __init__(self):
@@ -28,49 +27,20 @@ class MacLibrarian:
         
         self.all_vectors = []
         self.all_texts = []
+        self.cache = None
 
     def load_all_engrams(self, folder_path):
         """Scannar KINGSTON efter alla .tq-filer och laddar dem"""
-        # Vi letar i user_data mappen rekursivt
-        search_pattern = os.path.join(folder_path, "user_data/**/*.tq")
-        files = glob.glob(search_pattern, recursive=True)
-        
-        if not files:
-            print(f"❌ Hittade inga engrams i {folder_path}/user_data")
-            return False
-
-        print(f"📚 Laddar in {len(files)} arkiverade filer/engrams...")
         start_t = time.time()
-        
-        for file_path in files:
-            with open(file_path, "rb") as f:
-                try:
-                    data = pickle.load(f)
-                    if "vectors" in data and "texts" in data:
-                        self.all_vectors.append(data["vectors"])
-                        self.all_texts.extend(data["texts"])
-                except Exception as e:
-                    print(f"⚠️ Kunde inte läsa {file_path}: {e}")
-        
-        if self.all_vectors:
-            self.all_vectors = np.vstack(self.all_vectors)
-            print(f"✅ Biblioteket redo! ({len(self.all_texts)} textblock på {time.time()-start_t:.2f}s)")
+        self.cache = load_engram_cache()
+        if self.cache['texts']:
+            print(f"✅ Biblioteket redo! ({len(self.cache['texts'])} textblock på {time.time()-start_t:.2f}s)")
             return True
         return False
         
     def smart_search(self, question, top_k=10):
         """Vektor-sökning (Cosine Similarity)"""
-        # Multilingual encoder förstår nu 'äpple' == 'apple'
-        q_vec = self.encoder.encode([question])[0]
-        
-        # Beräkna likhet
-        similarities = np.dot(self.all_vectors, q_vec) / (
-            np.linalg.norm(self.all_vectors, axis=1) * np.linalg.norm(q_vec)
-        )
-        
-        # Hämta de bästa träffarna
-        best_indices = np.argsort(similarities)[-top_k:][::-1]
-        return "\n\n---\n\n".join([self.all_texts[i] for i in best_indices])
+        return perform_search(question, self.encoder, self.cache, top_k=top_k)
 
 # --- CHAT LOOP ---
 if __name__ == "__main__":
