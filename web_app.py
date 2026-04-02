@@ -12,7 +12,7 @@ import shutil
 from mlx_lm import generate, stream_generate
 
 # Laddar funktioner från din centrala modul
-from core_loader import load_main_system, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive, load_engram_cache, perform_search
+from core_loader import load_main_system, get_available_models, BASE_PATH, ENGRAM_BASE, INDEX_FILE, load_master_index, save_master_index, get_id, extract_text, ai_analyze, process_and_archive, load_engram_cache, perform_search
 
 # --- KONFIGURATION FÖR ARKIVET ---
 RAW_FOLDER = os.path.join(BASE_PATH, "raw_data")
@@ -35,18 +35,36 @@ def save_history(messages):
 # --- GUI ---
 st.set_page_config(page_title="Librarian OS v00.00.02", page_icon="🍏", layout="wide")
 
+# Beräkna RAM-budget (75% av totalt minne)
+total_ram_gb = psutil.virtual_memory().total / (1024**3)
+RAM_USAGE_LIMIT = 0.75 
+ram_budget = total_ram_gb * RAM_USAGE_LIMIT
+
 st.sidebar.title("🍏 Librarian OS v2")
-st.sidebar.metric("RAM", f"{psutil.Process(os.getpid()).memory_info().rss / (1024**3):.2f} GB")
+st.sidebar.metric("System RAM", f"{total_ram_gb:.1f} GB", help=f"AI-budget (75%): {ram_budget:.1f} GB")
 
 st.sidebar.markdown("---")
+st.sidebar.subheader("Modellkonfiguration")
+
+# Hämta och filtrera modeller baserat på RAM
+all_models = get_available_models()
+compatible_models = [m for m in all_models if m['ram_estimate'] <= ram_budget]
+
+if not compatible_models:
+    st.sidebar.error(f"Inga modeller får plats i {ram_budget:.1f} GB RAM.")
+    selected_model_path = None
+else:
+    model_labels = {f"{m['name']} (~{m['ram_estimate']:.1f} GB)": m['path'] for m in compatible_models}
+    chosen_label = st.sidebar.selectbox("Välj modell:", list(model_labels.keys()))
+    selected_model_path = model_labels[chosen_label]
+
 use_archive = st.sidebar.toggle("Använd Arkiv (RAG)", value=True)
 search_threshold = st.sidebar.slider("Söktröskel", 0.0, 0.70, 0.22, 0.01)
-# v00.00.05 - Slider för kontext-djup
 top_k = st.sidebar.slider("Kontext-djup (Antal delar)", 1, 20, 5)
 
-if st.sidebar.button("🚀 Starta Systemet"):
+if st.sidebar.button("🚀 Starta Systemet") and selected_model_path:
     with st.sidebar.status("Laddar modeller...") as status:
-        m, t, e = load_main_system()
+        m, t, e = load_main_system(selected_model_path)
         st.session_state.model, st.session_state.tokenizer, st.session_state.encoder = m, t, e
         status.update(label="System ONLINE!", state="complete")
     st.rerun()

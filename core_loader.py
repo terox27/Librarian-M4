@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import streamlit as st
 import warnings
+import psutil
 from mlx_lm import load, generate
 from sentence_transformers import SentenceTransformer
 from pypdf import PdfReader
@@ -40,22 +41,50 @@ def load_encoder(encoder_path):
     print(f"🚀 Laddar Encoder: {encoder_path}")
     return SentenceTransformer(encoder_path, device='mps')
 
-@st.cache_resource
-def load_main_system():
-    """Hjälpfunktion för att väcka hela biblioteket samtidigt."""
-    model, tokenizer = load_llm(MAIN_LLM_PATH)
+def estimate_model_ram(model_name):
+    """Uppskattar RAM-krav baserat på modellnamn (t.ex. 8B-4bit)."""
+    name = model_name.lower()
+    params = 8.0 # Standard om vi inte hittar annat
+    
+    # Försök hitta miljarder parametrar (B)
+    p_match = re.search(r'(\d+(\.\d+)?)b', name)
+    if p_match:
+        params = float(p_match.group(1))
+        
+    # Bestäm bits per parameter
+    if "4bit" in name or "q4" in name:
+        gb_per_b = 0.7  # 4-bit tar ca 0.7GB per miljard parametrar (inkl overhead)
+    elif "8bit" in name or "q8" in name:
+        gb_per_b = 1.1
+    elif "fp16" in name:
+        gb_per_b = 2.1
+    else:
+        gb_per_b = 0.8  # Rimlig gissning för de flesta MLX-modeller (ofta q4/q8)
+        
+    return params * gb_per_b
+
+def load_main_system(model_path):
+    """Väcker AI:n med den valda modellen."""
+    model, tokenizer = load_llm(model_path)
     encoder = load_encoder(ENCODER_ID)
     return model, tokenizer, encoder
 
 def get_available_models():
-    """Hittar alla mappar i din models-katalog på KINGSTON."""
+    """Hittar modeller och räknar ut deras RAM-behov."""
     model_dir = os.path.join(BASE_PATH, "models")
     if not os.path.exists(model_dir):
         return []
     
-    models = [d for d in os.listdir(model_dir) 
-              if os.path.isdir(os.path.join(model_dir, d)) and not d.startswith('.')]
-    return models
+    found_models = []
+    for d in os.listdir(model_dir):
+        path = os.path.join(model_dir, d)
+        if os.path.isdir(path) and not d.startswith('.'):
+            found_models.append({
+                "name": d,
+                "path": path,
+                "ram_estimate": estimate_model_ram(d)
+            })
+    return found_models
 
 # --- TEXTEXTRAKTION OCH ANALYS ---
 
