@@ -42,5 +42,13 @@
     {
         "role": "assistant",
         "content": "Newton var en engelsk vetenskapsman och matematiker som levde under 1600-talet. Han är mest känd för sina betydelsefulla bidrag till fysiken, särskilt i områdena gravitation, rörelse och mekanik.\n\nNewton var en kristen och hade en stark tro på sin religion, men han var också en skeptisk och kritisk tänkare som inte var rädd att utmana traditionella idéer. Han läste Bibeln med samma intensiva och kritiska sinne som han använde för att studera naturen.\n\nNewton var en av de mest inflytelserika vetenskapsmännen i sin tid och hans arbete hade en enorm inverkan på utvecklingen av vetenskapen. Han publicerade flera viktiga verk, inklusive \"Philosophiæ Naturalis Principia Mathematica\", som är en av de mest betydelsefulla vetenskapliga böckerna i historien.\n\nNewton var också en komplex person som hade svårt att dela med sig av sina idéer och hade en tendens att isolera sig från andra. Han hade många konflikter med sina kollegor, inklusive Robert Hooke, och han var känd för sin känslighet och stolthet.\n\nTrots sina brister var Newton en av de mest betydelsefulla vetenskapsmännen i historien och hans arbete har haft en långvarig inverkan på utvecklingen av vetenskapen."
+    },
+    {
+        "role": "user",
+        "content": "vad är Newton berömd för"
+    },
+    {
+        "role": "assistant",
+        "content": "Newton är berömd för att ha kommit på idén om gravitation och att ha skapat sina tre lagar om rörelse. Han var också en av de första människorna som förstod att universum är stort och att jorden inte är centrumet. Dessutom var han en av de mest inflytelserika vetenskapsmännen i sin tid och hans arbete hade en stor inverkan på utvecklingen av fysik och matematik."
     }
 ]

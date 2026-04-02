@@ -33,14 +33,14 @@ def save_history(messages):
         json.dump(messages, f, indent=4, ensure_ascii=False)
 
 # --- GUI ---
-st.set_page_config(page_title="Librarian OS v00.00.02", page_icon="🍏", layout="wide")
+st.set_page_config(page_title="Librarian AI v2", page_icon="📖", layout="wide")
 
 # Beräkna RAM-budget (75% av totalt minne)
 total_ram_gb = psutil.virtual_memory().total / (1024**3)
 RAM_USAGE_LIMIT = 0.75 
 ram_budget = total_ram_gb * RAM_USAGE_LIMIT
 
-st.sidebar.title("🍏 Librarian OS v2")
+st.sidebar.title("📖 Librarian AI v2")
 st.sidebar.metric("System RAM", f"{total_ram_gb:.1f} GB", help=f"AI-budget (75%): {ram_budget:.1f} GB")
 
 st.sidebar.markdown("---")

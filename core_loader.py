@@ -78,7 +78,8 @@ def get_available_models():
     found_models = []
     for d in os.listdir(model_dir):
         path = os.path.join(model_dir, d)
-        if os.path.isdir(path) and not d.startswith('.'):
+        # Hoppa över dolda filer och mappen 'small' för att bara se huvudmodeller
+        if os.path.isdir(path) and not d.startswith('.') and d.lower() != "small":
             found_models.append({
                 "name": d,
                 "path": path,
