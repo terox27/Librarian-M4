@@ -5,6 +5,9 @@ venv/
 models/
 
 # Ignorera all din sparade fakta och vektorer
+
+
+
 engrams/
 *.tq
 raw_data/
@@ -13,5 +16,7 @@ raw_data/
 .DS_Store
 __pycache__/
 ._*
-
 *.json
+Librarian.code-workspace
+conversation_history.json
+
