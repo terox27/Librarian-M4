@@ -177,7 +177,7 @@ with tab2:
                 # Streaming av svar för en mer följsam upplevelse
                 placeholder = st.empty()
                 full_response = ""
-                for chunk in stream_generate(st.session_state.model, st.session_state.tokenizer, prompt=inp, max_tokens=1000):
+                for chunk in stream_generate(st.session_state.model, st.session_state.tokenizer, prompt=inp, max_tokens=2000):
                     full_response += chunk.text
                     placeholder.markdown(full_response + "▌")
                 placeholder.markdown(full_response)
