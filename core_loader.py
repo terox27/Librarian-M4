@@ -40,25 +40,37 @@ def load_llm(model_path):
         with open(config_path, "r") as f:
             cfg = json.load(f)
             
-            # Om modellen är märkt som gemma4, tvinga gemma2-arkitektur och mappa obligatoriska fält
             if cfg.get("model_type") == "gemma4":
                 model_config.update(cfg)
                 model_config["model_type"] = "gemma2"
                 
-                # Säkerställ att de 8 fält som MLX-LM kräver för Gemma2 finns (mappa från vanliga alias)
-                model_config["hidden_size"] = cfg.get("hidden_size", cfg.get("d_model"))
-                model_config["num_hidden_layers"] = cfg.get("num_hidden_layers", cfg.get("num_layers"))
-                model_config["intermediate_size"] = cfg.get("intermediate_size", cfg.get("feed_forward_size"))
-                model_config["num_attention_heads"] = cfg.get("num_attention_heads", cfg.get("num_heads"))
-                model_config["rms_norm_eps"] = cfg.get("rms_norm_eps", cfg.get("layer_norm_epsilon", 1e-6))
-                model_config["vocab_size"] = cfg.get("vocab_size")
-                model_config["num_key_value_heads"] = cfg.get("num_key_value_heads", cfg.get("num_kv_heads", model_config["num_attention_heads"]))
+                # Gemma4 lagrar arkitekturdetaljer i 'text_config'. Vi lyfter ut dem till roten.
+                text_cfg = cfg.get("text_config", {})
                 
-                # Beräkna head_dim om den saknas eller är ogiltig, och om nödvändiga värden finns
-                if (model_config.get("head_dim") is None or model_config.get("head_dim") == 0) and \
-                   model_config.get("hidden_size") is not None and model_config.get("hidden_size") > 0 and \
-                   model_config.get("num_attention_heads") is not None and model_config.get("num_attention_heads") > 0:
-                    model_config["head_dim"] = model_config["hidden_size"] // model_config["num_attention_heads"]
+                # Mappa de 8 obligatoriska fälten från text_config eller alias
+                model_config["hidden_size"] = text_cfg.get("hidden_size", cfg.get("hidden_size", cfg.get("d_model")))
+                model_config["num_hidden_layers"] = text_cfg.get("num_hidden_layers", cfg.get("num_hidden_layers", cfg.get("num_layers")))
+                model_config["intermediate_size"] = text_cfg.get("intermediate_size", cfg.get("intermediate_size", cfg.get("feed_forward_size")))
+                model_config["num_attention_heads"] = text_cfg.get("num_attention_heads", cfg.get("num_attention_heads", cfg.get("num_heads")))
+                model_config["rms_norm_eps"] = text_cfg.get("rms_norm_eps", cfg.get("rms_norm_eps", cfg.get("layer_norm_epsilon", 1e-6)))
+                model_config["vocab_size"] = text_cfg.get("vocab_size", cfg.get("vocab_size"))
+                model_config["num_key_value_heads"] = text_cfg.get("num_key_value_heads", cfg.get("num_key_value_heads", cfg.get("num_kv_heads", model_config.get("num_attention_heads"))))
+                
+                # Hämta head_dim direkt från text_config om den finns (i din JSON är den 256)
+                model_config["head_dim"] = text_cfg.get("head_dim", cfg.get("head_dim"))
+
+                # Fallback: Beräkna head_dim om den fortfarande saknas
+                _hidden_size = model_config.get("hidden_size")
+                _num_attention_heads = model_config.get("num_attention_heads")
+                if not model_config.get("head_dim") and \
+                   _hidden_size is not None and isinstance(_hidden_size, (int, float)) and _hidden_size > 0 and \
+                   _num_attention_heads is not None and isinstance(_num_attention_heads, (int, float)) and _num_attention_heads > 0:
+                    model_config["head_dim"] = int(_hidden_size // _num_attention_heads)
+    
+    # Slutlig kontroll: Om model_type är gemma2 och head_dim fortfarande saknas, kasta ett fel.
+    if model_config.get("model_type") == "gemma2" and "head_dim" not in model_config:
+        raise ValueError(f"Kunde inte ladda modellen: 'head_dim' saknas i konfigurationen för Gemma2-modell '{model_path}'. "
+                         f"Vänligen kontrollera din config.json.")
 
     return load(model_path, model_config=model_config)
 
