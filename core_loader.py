@@ -54,8 +54,10 @@ def load_llm(model_path):
                 model_config["vocab_size"] = cfg.get("vocab_size")
                 model_config["num_key_value_heads"] = cfg.get("num_key_value_heads", cfg.get("num_kv_heads", model_config["num_attention_heads"]))
                 
-                # Beräkna head_dim om den saknas
-                if "head_dim" not in model_config and model_config["hidden_size"] and model_config["num_attention_heads"]:
+                # Beräkna head_dim om den saknas eller är ogiltig, och om nödvändiga värden finns
+                if (model_config.get("head_dim") is None or model_config.get("head_dim") == 0) and \
+                   model_config.get("hidden_size") is not None and model_config.get("hidden_size") > 0 and \
+                   model_config.get("num_attention_heads") is not None and model_config.get("num_attention_heads") > 0:
                     model_config["head_dim"] = model_config["hidden_size"] // model_config["num_attention_heads"]
 
     return load(model_path, model_config=model_config)
