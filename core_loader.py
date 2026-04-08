@@ -31,17 +31,32 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 @st.cache_resource
 def load_llm(model_path):
-    """Laddar LLM-modellen i minnet. Hanterar model_type-mappning för gemma4."""
+    """Laddar LLM-modellen och mappar parametrar för att stödja gemma4/gemma2-arkitektur."""
     print(f"🧠 Laddar LLM från: {model_path}")
 
-    # Patch för att hantera ogiltiga model_types som 'gemma4' genom att mappa till 'gemma2'
     model_config = {}
     config_path = os.path.join(model_path, "config.json")
     if os.path.exists(config_path):
         with open(config_path, "r") as f:
             cfg = json.load(f)
+            
+            # Om modellen är märkt som gemma4, tvinga gemma2-arkitektur och mappa obligatoriska fält
             if cfg.get("model_type") == "gemma4":
+                model_config.update(cfg)
                 model_config["model_type"] = "gemma2"
+                
+                # Säkerställ att de 8 fält som MLX-LM kräver för Gemma2 finns (mappa från vanliga alias)
+                model_config["hidden_size"] = cfg.get("hidden_size", cfg.get("d_model"))
+                model_config["num_hidden_layers"] = cfg.get("num_hidden_layers", cfg.get("num_layers"))
+                model_config["intermediate_size"] = cfg.get("intermediate_size", cfg.get("feed_forward_size"))
+                model_config["num_attention_heads"] = cfg.get("num_attention_heads", cfg.get("num_heads"))
+                model_config["rms_norm_eps"] = cfg.get("rms_norm_eps", cfg.get("layer_norm_epsilon", 1e-6))
+                model_config["vocab_size"] = cfg.get("vocab_size")
+                model_config["num_key_value_heads"] = cfg.get("num_key_value_heads", cfg.get("num_kv_heads", model_config["num_attention_heads"]))
+                
+                # Beräkna head_dim om den saknas
+                if "head_dim" not in model_config and model_config["hidden_size"] and model_config["num_attention_heads"]:
+                    model_config["head_dim"] = model_config["hidden_size"] // model_config["num_attention_heads"]
 
     return load(model_path, model_config=model_config)
 
