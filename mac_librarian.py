@@ -14,12 +14,12 @@ class MacLibrarian:
         print("="*60)
         
         # Sökvägar hämtas centralt
-        self.MODEL_PATH = os.path.join(BASE_PATH, "models/Llama-3.1-8B-8bit")
+        self.MODEL_PATH = os.path.join(BASE_PATH, "models/gemma-4-e4b-it-nvfp4")
         # Vi använder Multilingual ID för att matcha web_app.py
         self.ENCODER_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
         # Använd core_loader för att väcka AI:n
-        print(f"🧠 Ansluter till Llama via Core Loader...")
+        print(f"🧠 Ansluter till Gemma 4 via Core Loader...")
         self.model, self.tokenizer = load_llm(self.MODEL_PATH)
         
         print(f"🌍 Startar Multilingual Vector Engine (MPS)...")
