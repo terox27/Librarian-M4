@@ -31,9 +31,19 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 @st.cache_resource
 def load_llm(model_path):
-    """Laddar Llama-modellen i minnet (MPS/Metal)."""
+    """Laddar LLM-modellen i minnet. Hanterar model_type-mappning för gemma4."""
     print(f"🧠 Laddar LLM från: {model_path}")
-    return load(model_path)
+
+    # Patch för att hantera ogiltiga model_types som 'gemma4' genom att mappa till 'gemma2'
+    model_config = {}
+    config_path = os.path.join(model_path, "config.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            cfg = json.load(f)
+            if cfg.get("model_type") == "gemma4":
+                model_config["model_type"] = "gemma2"
+
+    return load(model_path, model_config=model_config)
 
 @st.cache_resource
 def load_encoder(encoder_path):

@@ -64,10 +64,14 @@ top_k = st.sidebar.slider("Kontext-djup (Antal delar)", 1, 20, 5)
 
 if st.sidebar.button("🚀 Starta Systemet") and selected_model_path:
     with st.sidebar.status("Laddar modeller...") as status:
-        m, t, e = load_main_system(selected_model_path)
-        st.session_state.model, st.session_state.tokenizer, st.session_state.encoder = m, t, e
-        status.update(label="System ONLINE!", state="complete")
-    st.rerun()
+        try:
+            m, t, e = load_main_system(selected_model_path)
+            st.session_state.model, st.session_state.tokenizer, st.session_state.encoder = m, t, e
+            status.update(label="System ONLINE!", state="complete")
+            st.rerun()
+        except Exception as e:
+            status.update(label="Fel vid laddning!", state="error")
+            st.sidebar.error(f"Kunde inte ladda modellen: {e}")
 
 if st.sidebar.button("🗑️ Töm RAM"):
     st.cache_resource.clear()
